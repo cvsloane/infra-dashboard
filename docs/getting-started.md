@@ -15,7 +15,7 @@ Before you begin, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/cvsloane/infra-dashboard.git
+git clone https://github.com/cvsloane/infra-dashboard-oss.git
 cd infra-dashboard
 
 # Install dependencies
