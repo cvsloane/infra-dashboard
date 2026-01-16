@@ -1,6 +1,7 @@
 # Infra Dashboard
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/cvsloane/infra-dashboard-oss)
 
 A real-time infrastructure monitoring dashboard for self-hosted environments. Monitor your Coolify applications, BullMQ job queues, PostgreSQL databases, and VPS servers from a single unified interface.
 
