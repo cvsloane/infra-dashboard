@@ -6,7 +6,7 @@ This guide walks you through setting up infra-dashboard from scratch.
 
 Before you begin, ensure you have:
 
-- **Node.js 18+** - Required for Next.js 16
+- **Node.js 18+** - Required for Next.js 15
 - **Coolify** - Self-hosted PaaS running on your server
 - **Redis** - For BullMQ queue monitoring (optional)
 - **Prometheus** - For VPS and database metrics (optional)
