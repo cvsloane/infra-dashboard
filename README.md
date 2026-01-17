@@ -5,7 +5,7 @@
 
 A real-time infrastructure monitoring dashboard for self-hosted environments. Monitor your Coolify applications, BullMQ job queues, PostgreSQL databases, and VPS servers from a single unified interface.
 
-Built with Next.js 16, React 19, and TypeScript.
+Built with Next.js 15, React 19, and TypeScript.
 
 ## Features
 
