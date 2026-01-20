@@ -1,11 +1,10 @@
 # Infra Dashboard
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/cvsloane/infra-dashboard-oss)
 
 A real-time infrastructure monitoring dashboard for self-hosted environments. Monitor your Coolify applications, BullMQ job queues, PostgreSQL databases, and VPS servers from a single unified interface.
 
-Built with Next.js 15, React 19, and TypeScript.
+Built with Next.js 16, React 19, and TypeScript.
 
 ## Features
 
@@ -155,3 +154,11 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+## Development Status
+
+See [project_status.md](./project_status.md) for recent development activity and context.
+
+## Development Status
+
+See [project_status.md](./project_status.md) for recent development activity and context.
