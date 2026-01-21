@@ -31,10 +31,13 @@ export async function GET(request: Request) {
     const pgbouncerServerIdle = pgbouncer.pools.reduce((sum, p) => sum + p.server_idle, 0);
 
     // Determine status and message
-    const status = postgres.up ? 'ok' : 'error';
+    const prometheusConfigured = Boolean(process.env.PROMETHEUS_URL);
+    const status = postgres.up ? 'ok' : prometheusConfigured ? 'error' : 'warning';
     const message = postgres.up
       ? `${postgres.connections.active} active connections`
-      : 'PostgreSQL is down';
+      : prometheusConfigured
+      ? 'PostgreSQL is down'
+      : 'Prometheus not configured';
 
     return NextResponse.json({
       // UI-expected fields
