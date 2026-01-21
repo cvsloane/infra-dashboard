@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ApplicationList } from '@/components/coolify/ApplicationList';
 import { DeploymentCard } from '@/components/coolify/DeploymentCard';
 import { DeploymentProgressList } from '@/components/coolify/DeploymentProgress';
@@ -59,7 +59,10 @@ export default function CoolifyPage() {
     }
   };
 
-  const fetchAllDeployments = async (isInitial = false) => {
+  const fetchAllDeployments = useCallback(async (
+    options: { isInitial?: boolean; cursor?: string | null } = {}
+  ) => {
+    const { isInitial = false, cursor } = options;
     if (isInitial) {
       setAllDeployments([]);
       setNextCursor(null);
@@ -70,7 +73,7 @@ export default function CoolifyPage() {
       const params = new URLSearchParams({
         view: 'all',
         limit: '50',
-        ...(nextCursor && !isInitial && { cursor: nextCursor }),
+        ...(cursor && !isInitial && { cursor }),
         ...(statusFilter.length > 0 && { status: statusFilter.join(',') }),
         ...(applicationFilter && { application: applicationFilter }),
         ...(startDate && { startDate }),
@@ -94,12 +97,12 @@ export default function CoolifyPage() {
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [statusFilter, applicationFilter, startDate, endDate]);
 
   const loadMoreDeployments = () => {
     if (nextCursor && !loadingMore) {
       setLoadingMore(true);
-      fetchAllDeployments(false);
+      fetchAllDeployments({ cursor: nextCursor });
     }
   };
 
@@ -126,19 +129,11 @@ export default function CoolifyPage() {
     return () => clearInterval(interval);
   }, [activeDeployments.length, isConnected]);
 
-  // Fetch all deployments when switching to "All History" tab
+  // Fetch all deployments when viewing history (also refreshes when filters change)
   useEffect(() => {
-    if (activeTab === 'history' && allDeployments.length === 0) {
-      fetchAllDeployments(true);
-    }
-  }, [activeTab]);
-
-  // Refetch when filters change
-  useEffect(() => {
-    if (activeTab === 'history') {
-      fetchAllDeployments(true);
-    }
-  }, [statusFilter, applicationFilter, startDate, endDate]);
+    if (activeTab !== 'history') return;
+    fetchAllDeployments({ isInitial: true });
+  }, [activeTab, fetchAllDeployments]);
 
   const handleDeploy = async (uuid: string, force = false) => {
     try {

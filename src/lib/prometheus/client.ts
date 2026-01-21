@@ -169,7 +169,7 @@ export async function getPostgresHealth(): Promise<PostgresHealth> {
 
     try {
       const pgbouncerActive = await queryPrometheus('sum(pgbouncer_pools_client_active_connections)');
-      const pgbouncerWaiting = await queryPrometheus('sum(pgbouncer_pools_client_waiting_connections)');
+      await queryPrometheus('sum(pgbouncer_pools_client_waiting_connections)');
       const pgbouncerServerIdle = await queryPrometheus('sum(pgbouncer_pools_server_idle_connections)');
 
       activeConns = getValue(pgbouncerActive);

@@ -112,7 +112,7 @@ export async function getAllDeployments(
 
   // Build WHERE clauses
   const whereClauses = ["status NOT IN ('queued', 'in_progress')"];
-  const params: any[] = [];
+  const params: Array<string | number | string[]> = [];
   let paramIndex = 1;
 
   if (cursor) {
@@ -277,7 +277,7 @@ export async function getDeploymentByUuid(uuid: string): Promise<DeploymentWithL
  */
 export async function healthCheck(): Promise<{ ok: boolean; message: string }> {
   try {
-    const result = await pool.query('SELECT 1');
+    await pool.query('SELECT 1');
     return { ok: true, message: 'Connected to Coolify database' };
   } catch (error) {
     return {

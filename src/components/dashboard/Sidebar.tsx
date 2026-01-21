@@ -28,15 +28,18 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const pathname = usePathname();
+interface SidebarContentProps {
+  pathname: string;
+  onClose?: () => void;
+}
 
+function SidebarContent({ pathname, onClose }: SidebarContentProps) {
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
     onClose?.();
   };
 
-  const SidebarContent = () => (
+  return (
     <>
       {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b px-6">
@@ -86,12 +89,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
     </>
   );
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const pathname = usePathname();
 
   return (
     <>
       {/* Desktop sidebar - always visible on md+ */}
       <div className="hidden md:flex h-full w-64 flex-col border-r bg-background">
-        <SidebarContent />
+        <SidebarContent pathname={pathname} />
       </div>
 
       {/* Mobile sidebar - drawer with backdrop */}
@@ -105,7 +112,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           />
           {/* Drawer */}
           <div className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-background shadow-lg md:hidden">
-            <SidebarContent />
+            <SidebarContent pathname={pathname} onClose={onClose} />
           </div>
         </>
       )}

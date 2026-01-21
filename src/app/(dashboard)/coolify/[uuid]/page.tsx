@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { DeploymentCard } from '@/components/coolify/DeploymentCard';
 import { DeploymentLogs } from '@/components/coolify/DeploymentLogs';
@@ -23,7 +23,7 @@ export default function DeploymentDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const fetchDeployment = async () => {
+  const fetchDeployment = useCallback(async () => {
     try {
       const res = await fetch(`/api/coolify/deployments/${uuid}`);
       if (res.ok) {
@@ -36,7 +36,7 @@ export default function DeploymentDetailPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [uuid]);
 
   useEffect(() => {
     fetchDeployment();
@@ -49,7 +49,7 @@ export default function DeploymentDetailPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [uuid, deployment?.status]);
+  }, [fetchDeployment, deployment?.status]);
 
   const handleRefresh = () => {
     setRefreshing(true);

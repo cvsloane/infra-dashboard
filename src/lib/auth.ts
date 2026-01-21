@@ -23,7 +23,6 @@ export function validatePassword(password: string): boolean {
 // Create a simple session token (just a timestamp hash for simplicity)
 function createSessionToken(): string {
   const timestamp = Date.now().toString();
-  const secret = process.env.DASHBOARD_PASSWORD || 'default-secret';
   // Simple token: base64 of timestamp + secret hash indicator
   return Buffer.from(`${timestamp}:valid`).toString('base64');
 }
