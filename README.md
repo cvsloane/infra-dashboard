@@ -8,6 +8,25 @@
 
 Real-time infrastructure monitoring dashboard for Coolify-managed applications, BullMQ job queues, PostgreSQL databases, and VPS servers. Built with Next.js 16, React 19, and TypeScript.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="800">
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+| Coolify Deployments | Queue Management |
+|---------------------|------------------|
+| ![Coolify](docs/images/coolify-deployments.png) | ![Queues](docs/images/queue-management.png) |
+
+| PostgreSQL Metrics |
+|--------------------|
+| ![PostgreSQL](docs/images/postgres-metrics.png) |
+
+</details>
+
 ## Quick Start
 
 ```bash

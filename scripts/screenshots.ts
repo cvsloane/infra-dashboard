@@ -1,6 +1,10 @@
 import { chromium } from '@playwright/test'
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const SCREENSHOTS = [
   { name: 'dashboard-overview', path: '/', description: 'Main dashboard' },
@@ -10,7 +14,7 @@ const SCREENSHOTS = [
 ]
 
 async function takeScreenshots() {
-  const outputDir = path.join(import.meta.dirname, '../docs/images')
+  const outputDir = path.join(__dirname, '../docs/images')
   fs.mkdirSync(outputDir, { recursive: true })
 
   const browser = await chromium.launch()
