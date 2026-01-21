@@ -1,0 +1,11 @@
+[Unit]
+Description=Infra AutoHEAL
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/infra-autoheal.env
+ExecStart=/opt/system-automation/scripts/infra-autoheal.sh
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,9 @@
+[Unit]
+Description=Worker Supervisor (report + watchdog)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/worker-supervisor.env
+ExecStart=/opt/system-automation/scripts/worker-supervisor.sh
