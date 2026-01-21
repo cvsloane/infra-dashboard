@@ -37,7 +37,7 @@ Built with Next.js 16, React 19, and TypeScript.
 
 ```bash
 # Clone and install
-git clone https://github.com/cvsloane/infra-dashboard-oss.git
+git clone https://github.com/cvsloane/infra-dashboard-oss.git infra-dashboard
 cd infra-dashboard
 npm install
 
@@ -154,10 +154,6 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Development Status
-
-See [project_status.md](./project_status.md) for recent development activity and context.
 
 ## Development Status
 

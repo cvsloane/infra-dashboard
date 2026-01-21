@@ -6,7 +6,7 @@ This guide walks you through setting up infra-dashboard from scratch.
 
 Before you begin, ensure you have:
 
-- **Node.js 18+** - Required for Next.js 15
+- **Node.js 18+** - Required for Next.js 16
 - **Coolify** - Self-hosted PaaS running on your server
 - **Redis** - For BullMQ queue monitoring (optional)
 - **Prometheus** - For VPS and database metrics (optional)
@@ -15,7 +15,7 @@ Before you begin, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/cvsloane/infra-dashboard-oss.git
+git clone https://github.com/cvsloane/infra-dashboard-oss.git infra-dashboard
 cd infra-dashboard
 
 # Install dependencies
