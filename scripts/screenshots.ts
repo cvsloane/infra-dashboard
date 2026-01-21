@@ -44,8 +44,8 @@ async function takeScreenshots() {
   for (const screenshot of SCREENSHOTS) {
     try {
       await page.goto(`${baseUrl}${screenshot.path}`, { waitUntil: 'domcontentloaded' })
-      // Wait for data to load (SSE keeps connection open so networkidle won't work)
-      await page.waitForTimeout(3000)
+      // Wait for data to fully load (API calls, SSE updates, animations)
+      await page.waitForTimeout(8000)
       await page.screenshot({
         path: path.join(outputDir, `${screenshot.name}.png`),
         fullPage: false
