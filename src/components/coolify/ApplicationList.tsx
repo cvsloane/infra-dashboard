@@ -65,12 +65,12 @@ export function ApplicationList({ applications, isLoading, onDeploy }: Applicati
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Application</TableHead>
-          <TableHead>Project / Environment</TableHead>
+          <TableHead className="max-w-[200px]">Application</TableHead>
+          <TableHead className="max-w-[180px]">Project / Environment</TableHead>
           <TableHead>Branch</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Domain</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead className="max-w-[200px]">Domain</TableHead>
+          <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -78,8 +78,8 @@ export function ApplicationList({ applications, isLoading, onDeploy }: Applicati
           const isDeploying = deployingAction?.uuid === app.uuid;
           return (
             <TableRow key={app.uuid}>
-            <TableCell className="font-medium">{app.name}</TableCell>
-            <TableCell className="text-muted-foreground">
+            <TableCell className="font-medium max-w-[200px] truncate" title={app.name}>{app.name}</TableCell>
+            <TableCell className="text-muted-foreground max-w-[180px] truncate" title={`${app.environment?.project?.name || '-'} / ${app.environment?.name || '-'}`}>
               {app.environment?.project?.name || '-'} / {app.environment?.name || '-'}
             </TableCell>
             <TableCell>
@@ -95,21 +95,22 @@ export function ApplicationList({ applications, isLoading, onDeploy }: Applicati
                 {app.status}
               </Badge>
             </TableCell>
-            <TableCell>
+            <TableCell className="max-w-[200px]">
               {app.fqdn && (
                 <a
                   href={app.fqdn.startsWith('http') ? app.fqdn : `https://${app.fqdn}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-sm text-blue-500 hover:underline"
+                  title={app.fqdn.replace(/https?:\/\//, '')}
                 >
-                  {app.fqdn.replace(/https?:\/\//, '')}
-                  <ExternalLink className="h-3 w-3" />
+                  <span className="truncate">{app.fqdn.replace(/https?:\/\//, '')}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               )}
             </TableCell>
-            <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-2">
+            <TableCell className="text-right whitespace-nowrap">
+              <div className="flex items-center justify-end gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
