@@ -1,0 +1,11 @@
+# Default owners for everything
+* @cvsloane
+
+# Source code
+/src/ @cvsloane
+
+# Documentation
+/docs/ @cvsloane
+
+# GitHub configuration
+/.github/ @cvsloane

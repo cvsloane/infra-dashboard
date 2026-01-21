@@ -1,5 +1,11 @@
 # Infra Dashboard
 
+[![CI](https://github.com/cvsloane/infra-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cvsloane/infra-dashboard/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/cvsloane/infra-dashboard)](https://github.com/cvsloane/infra-dashboard/releases)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Real-time infrastructure monitoring dashboard for Coolify-managed applications, BullMQ job queues, PostgreSQL databases, and VPS servers. Built with Next.js 16, React 19, and TypeScript.
 
 ## Quick Start

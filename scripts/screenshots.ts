@@ -1,0 +1,39 @@
+import { chromium } from '@playwright/test'
+import fs from 'fs'
+import path from 'path'
+
+const SCREENSHOTS = [
+  { name: 'dashboard-overview', path: '/', description: 'Main dashboard' },
+  { name: 'coolify-deployments', path: '/coolify', description: 'Coolify deployments' },
+  { name: 'queue-management', path: '/queues', description: 'BullMQ queues' },
+  { name: 'postgres-metrics', path: '/postgres', description: 'PostgreSQL stats' },
+]
+
+async function takeScreenshots() {
+  const outputDir = path.join(import.meta.dirname, '../docs/images')
+  fs.mkdirSync(outputDir, { recursive: true })
+
+  const browser = await chromium.launch()
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000'
+
+  for (const screenshot of SCREENSHOTS) {
+    try {
+      await page.goto(`${baseUrl}${screenshot.path}`)
+      await page.waitForLoadState('networkidle')
+      await page.screenshot({
+        path: path.join(outputDir, `${screenshot.name}.png`),
+        fullPage: false
+      })
+      console.log(`Captured: ${screenshot.name}`)
+    } catch (error) {
+      console.error(`Failed to capture ${screenshot.name}:`, error)
+    }
+  }
+
+  await browser.close()
+  console.log('Screenshots complete!')
+}
+
+takeScreenshots()

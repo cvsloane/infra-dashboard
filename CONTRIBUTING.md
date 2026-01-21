@@ -12,6 +12,17 @@ Before opening an issue, please check existing issues to avoid duplicates. When 
 - Your environment (OS, Node.js version, browser)
 - Relevant logs or screenshots
 
+## Finding Your First Contribution
+
+New to the project? Look for issues labeled [`good first issue`](https://github.com/cvsloane/infra-dashboard/labels/good%20first%20issue) - these are specifically designed for newcomers.
+
+**How to claim an issue:**
+1. Comment on the issue expressing your interest
+2. Wait for a maintainer to assign it to you
+3. Fork the repo and start working
+
+Issues labeled [`help wanted`](https://github.com/cvsloane/infra-dashboard/labels/help%20wanted) are also great for contributors of all experience levels.
+
 ## Suggesting Features
 
 Feature requests are welcome. Please:
