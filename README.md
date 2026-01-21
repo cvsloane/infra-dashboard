@@ -11,7 +11,7 @@ Real-time infrastructure monitoring dashboard for Coolify-managed applications, 
 ## Screenshots
 
 <p align="center">
-  <img src="docs/images/dashboard-overview.png" alt="Dashboard Overview" width="800">
+  <img src="https://raw.githubusercontent.com/cvsloane/infra-dashboard/main/docs/images/dashboard-overview.png" alt="Dashboard Overview" width="800">
 </p>
 
 <details>
@@ -19,11 +19,11 @@ Real-time infrastructure monitoring dashboard for Coolify-managed applications, 
 
 | Coolify Deployments | Queue Management |
 |---------------------|------------------|
-| ![Coolify](docs/images/coolify-deployments.png) | ![Queues](docs/images/queue-management.png) |
+| ![Coolify](https://raw.githubusercontent.com/cvsloane/infra-dashboard/main/docs/images/coolify-deployments.png) | ![Queues](https://raw.githubusercontent.com/cvsloane/infra-dashboard/main/docs/images/queue-management.png) |
 
 | PostgreSQL Metrics |
 |--------------------|
-| ![PostgreSQL](docs/images/postgres-metrics.png) |
+| ![PostgreSQL](https://raw.githubusercontent.com/cvsloane/infra-dashboard/main/docs/images/postgres-metrics.png) |
 
 </details>
 
