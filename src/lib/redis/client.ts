@@ -67,13 +67,12 @@ export function getRedis(): Redis {
   const host = process.env.REDIS_HOST || '127.0.0.1';
   const port = parseInt(process.env.REDIS_PORT || '6379', 10);
   const password = process.env.REDIS_PASSWORD;
+  const username = process.env.REDIS_USERNAME;
+  const redisUrl = process.env.REDIS_URL;
 
-  redis = new Redis({
-    host,
-    port,
-    password,
+  const baseOptions = {
     maxRetriesPerRequest: 3,
-    retryStrategy: (times) => {
+    retryStrategy: (times: number) => {
       if (times > 3) {
         console.error('Redis connection failed after 3 retries');
         return null;
@@ -81,7 +80,17 @@ export function getRedis(): Redis {
       return Math.min(times * 100, 2000);
     },
     lazyConnect: true,
-  });
+  };
+
+  redis = redisUrl
+    ? new Redis(redisUrl, baseOptions)
+    : new Redis({
+        host,
+        port,
+        username,
+        password,
+        ...baseOptions,
+      });
 
   redis.on('error', (err) => {
     console.error('Redis connection error:', err.message);

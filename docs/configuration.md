@@ -25,7 +25,7 @@ COOLIFY_API_TOKEN=your-token-here
 ### COOLIFY_DB_URL
 **Optional** | Example: `postgresql://coolify:password@localhost:5432/coolify`
 
-Direct PostgreSQL connection to Coolify's database. Enables real-time deployment tracking (faster than API polling) and site health checks.
+Direct PostgreSQL connection to Coolify's database. Enables real-time deployment tracking (faster than API polling) and site health checks. Deployment logs and history require this connection.
 
 When running in Coolify, use the container name:
 ```bash
@@ -39,7 +39,7 @@ COOLIFY_DB_URL=postgresql://coolify:password@coolify-db:5432/coolify
 ### PROMETHEUS_URL
 **Optional** | Example: `http://192.168.1.100:9090`
 
-Prometheus server URL for querying metrics.
+Prometheus server URL for querying metrics. If unset, PostgreSQL and VPS metrics will show as unavailable.
 
 ```bash
 PROMETHEUS_URL=http://your-prometheus-server:9090
@@ -177,19 +177,6 @@ DASHBOARD_PASSWORD=your-secure-password
 
 ---
 
-## Application
-
-### NEXT_PUBLIC_APP_URL
-**Optional** | Example: `https://ops.yourdomain.com`
-
-Public URL of the dashboard. Used for SSE connection URLs in client-side code.
-
-```bash
-NEXT_PUBLIC_APP_URL=https://ops.yourdomain.com
-```
-
----
-
 ## Example Configurations
 
 ### Minimal (Coolify only)
@@ -223,5 +210,4 @@ SITE_HEALTH_EXCLUSIONS=internal-tool
 
 # Security
 DASHBOARD_PASSWORD=secure-password
-NEXT_PUBLIC_APP_URL=https://ops.yourdomain.com
 ```

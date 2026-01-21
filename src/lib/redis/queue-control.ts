@@ -1,10 +1,19 @@
 import { Queue } from 'bullmq';
+import Redis from 'ioredis';
 
 const getQueueConnection = () => {
+  const redisUrl = process.env.REDIS_URL;
   const host = process.env.REDIS_HOST || '127.0.0.1';
   const port = parseInt(process.env.REDIS_PORT || '6379', 10);
   const password = process.env.REDIS_PASSWORD;
   const username = process.env.REDIS_USERNAME;
+
+  if (redisUrl) {
+    return new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
+  }
 
   return {
     host,

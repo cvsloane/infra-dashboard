@@ -68,6 +68,8 @@ Different features require different services. Enable only what you need:
 | Agents | Redis (agent run history) | `REDIS_HOST`, `REDIS_PORT` |
 | AutoHEAL | Redis + Coolify API | All Coolify + Redis vars |
 
+> If `PROMETHEUS_URL` is not set, Postgres/VPS metrics will appear unavailable.
+
 ## Production Deployment
 
 ### Using Docker
