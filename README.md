@@ -146,6 +146,37 @@ docker run -p 3000:3000 --env-file .env.local infra-dashboard
 3. Configure environment variables in Coolify UI
 4. Ensure container is on the `coolify` Docker network to access `coolify-db`
 
+## Performance & Scaling
+
+### Resource Considerations
+- Minimum recommended: 2 CPU cores, 4GB RAM
+- Prometheus metrics collection can be resource-intensive
+- Redis connection pool and BullMQ monitoring have moderate overhead
+
+### Monitoring Recommendations
+- Use separate Prometheus instances for different server types
+- Configure reasonable scrape intervals to reduce load
+- Monitor Redis memory usage during queue processing
+
+## Troubleshooting
+
+### Common Issues
+- **Missing API Tokens**: Ensure Coolify and Prometheus tokens are correct
+- **Connection Errors**: Verify network accessibility between services
+- **Performance Bottlenecks**: Check Prometheus exporter configurations
+
+### Diagnostic Commands
+```bash
+# Check Redis connection
+redis-cli ping
+
+# Verify Prometheus metrics endpoint
+curl http://prometheus.example.com:9090/metrics
+
+# Test Coolify API connectivity
+curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $COOLIFY_API_URL/applications
+```
+
 ## Technical Details
 
 ### SSE Real-Time Updates
