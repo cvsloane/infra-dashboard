@@ -78,7 +78,18 @@ export function detectBuildStage(logs: string | null | undefined, status: string
 export function getLogPreview(logs: string | null | undefined, lineCount: number = 6): string[] {
   if (!logs) return [];
 
-  const lines = logs.split('\n').filter(line => line.trim().length > 0);
+  // Strip ANSI control sequences but keep SGR color codes (ending in 'm').
+  const cleaned = logs
+    // OSC (operating system command) sequences
+    .replace(/\x1b\][^\x07]*(\x07|\x1b\\)/g, '')
+    // CSI sequences (keep SGR "m" codes for color parsing)
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, (seq) => (seq.endsWith('m') ? seq : ''));
+
+  // Split on \n, \r\n, or standalone \r
+  const lines = cleaned
+    .split(/\r\n|\r(?!\n)|\n/)
+    .filter(line => line.trim().length > 0);
+
   return lines.slice(-lineCount);
 }
 

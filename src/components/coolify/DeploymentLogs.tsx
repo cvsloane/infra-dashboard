@@ -35,7 +35,7 @@ const ansiToClass: Record<string, string> = {
 
 function parseAnsiLine(line: string): { text: string; className: string }[] {
   const parts: { text: string; className: string }[] = [];
-  const regex = /\x1b\[(\d+)m/g;
+  const regex = /\x1b\[([0-9;]*)m/g;
 
   let lastIndex = 0;
   let currentClass = '';
@@ -51,11 +51,13 @@ function parseAnsiLine(line: string): { text: string; className: string }[] {
     }
 
     // Update current class
-    const code = match[1];
-    if (code === '0') {
-      currentClass = '';
-    } else {
-      currentClass = ansiToClass[code] || '';
+    const codes = match[1].length > 0 ? match[1].split(';') : ['0'];
+    for (const code of codes) {
+      if (code === '0' || code === '39') {
+        currentClass = '';
+      } else if (ansiToClass[code]) {
+        currentClass = ansiToClass[code];
+      }
     }
 
     lastIndex = regex.lastIndex;

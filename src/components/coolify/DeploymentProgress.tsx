@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,6 @@ import {
   Hammer,
   Rocket,
   Check,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import type { DeploymentRecordClientWithLogs, BuildStage } from '@/types/deployments';
 import { detectBuildStage, getLogPreview, isStageComplete, isStageActive } from '@/lib/coolify/buildStages';
@@ -42,7 +40,7 @@ const ansiToClass: Record<string, string> = {
 
 function parseAnsiLine(line: string): { text: string; className: string }[] {
   const parts: { text: string; className: string }[] = [];
-  const regex = /\x1b\[(\d+)m/g;
+  const regex = /\x1b\[([0-9;]*)m/g;
 
   let lastIndex = 0;
   let currentClass = '';
@@ -56,11 +54,13 @@ function parseAnsiLine(line: string): { text: string; className: string }[] {
       });
     }
 
-    const code = match[1];
-    if (code === '0') {
-      currentClass = '';
-    } else {
-      currentClass = ansiToClass[code] || '';
+    const codes = match[1].length > 0 ? match[1].split(';') : ['0'];
+    for (const code of codes) {
+      if (code === '0' || code === '39') {
+        currentClass = '';
+      } else if (ansiToClass[code]) {
+        currentClass = ansiToClass[code];
+      }
     }
 
     lastIndex = regex.lastIndex;
@@ -155,46 +155,46 @@ function BuildStageIndicator({ currentStage }: BuildStageIndicatorProps) {
   );
 }
 
-// Log Preview Component
-interface LogPreviewProps {
+// Live Log Box Component - fixed size with auto-scroll
+interface LiveLogBoxProps {
   logs: string | null | undefined;
-  expanded: boolean;
-  onToggle: () => void;
 }
 
-function LogPreview({ logs, expanded, onToggle }: LogPreviewProps) {
-  const previewLines = getLogPreview(logs, expanded ? 10 : 5);
+function LiveLogBox({ logs }: LiveLogBoxProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isFollowing, setIsFollowing] = useState(true);
+  const logLines = getLogPreview(logs, 50); // Get more lines for scrolling
 
-  if (previewLines.length === 0) {
-    return null;
-  }
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distanceFromBottom <= 24;
+    if (nearBottom !== isFollowing) {
+      setIsFollowing(nearBottom);
+    }
+  };
+
+  // Auto-scroll to bottom when following
+  useEffect(() => {
+    if (isFollowing && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs, isFollowing]);
+
+  if (logLines.length === 0) return null;
 
   return (
     <div className="mt-3">
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-2 transition-colors"
-      >
-        {expanded ? (
-          <ChevronUp className="h-3 w-3" />
-        ) : (
-          <ChevronDown className="h-3 w-3" />
-        )}
-        {expanded ? 'Hide logs' : 'Show logs'}
-      </button>
-
       <div
-        className={cn(
-          'bg-black/90 rounded-md p-2 font-mono text-xs overflow-hidden transition-all',
-          expanded ? 'max-h-48' : 'max-h-20'
-        )}
+        ref={scrollRef}
+        className="bg-black/90 rounded-md p-2 font-mono text-xs h-32 overflow-y-auto"
+        onScroll={handleScroll}
       >
-        {previewLines.map((line, i) => (
-          <div key={i} className="text-gray-300 truncate leading-relaxed">
+        {logLines.map((line, i) => (
+          <div key={i} className="text-gray-300 whitespace-pre-wrap break-all leading-relaxed">
             {parseAnsiLine(line).map((part, j) => (
-              <span key={j} className={part.className}>
-                {part.text}
-              </span>
+              <span key={j} className={part.className}>{part.text}</span>
             ))}
           </div>
         ))}
@@ -206,7 +206,6 @@ function LogPreview({ logs, expanded, onToggle }: LogPreviewProps) {
 export function DeploymentProgress({ deployment, onCancel }: DeploymentProgressProps) {
   const [elapsedTime, setElapsedTime] = useState(formatElapsedTime(deployment.createdAt));
   const [isCancelling, setIsCancelling] = useState(false);
-  const [logsExpanded, setLogsExpanded] = useState(false);
 
   // Update elapsed time every second for in-progress deployments
   useEffect(() => {
@@ -278,13 +277,9 @@ export function DeploymentProgress({ deployment, onCancel }: DeploymentProgressP
               </div>
             )}
 
-            {/* Log Preview */}
+            {/* Live Log Box */}
             {isActive && deployment.logs && (
-              <LogPreview
-                logs={deployment.logs}
-                expanded={logsExpanded}
-                onToggle={() => setLogsExpanded(!logsExpanded)}
-              />
+              <LiveLogBox logs={deployment.logs} />
             )}
           </div>
 
