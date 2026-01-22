@@ -164,3 +164,7 @@ BullMQ workers are detected via `bull:*:stalled-check` TTL keys in Redis. A work
 - Optional password protection via `DASHBOARD_PASSWORD`
 - Sessions stored as httpOnly cookies, valid for 7 days
 - Public endpoints: `/login`, `/api/health`
+
+## Development Status
+
+See [project_status.md](./project_status.md) for recent development activity and context.
