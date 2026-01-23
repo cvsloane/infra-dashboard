@@ -128,9 +128,13 @@ Browser <──── HTTPS ────> Next.js App (standalone)
 
 ## Configuration
 
-See `.env.example` and [docs/configuration.md](docs/configuration.md) for all options.
+See `.env.example` and [docs/configuration.md](docs/configuration.md) for all configuration options.
 
-**Security note:** set `DASHBOARD_PASSWORD` in production.
+**Security Best Practices:**
+- Always set `DASHBOARD_PASSWORD` in production environments
+- Use strong, unique passwords
+- Configure HTTPS for secure communication
+- Limit network access to the dashboard
 
 ## Deployment
 
