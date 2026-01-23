@@ -4,7 +4,7 @@
 
 A real-time infrastructure monitoring dashboard for self-hosted environments. Monitor your Coolify applications, BullMQ job queues, PostgreSQL databases, and VPS servers from a single unified interface.
 
-Built with Next.js 16, React 19, and TypeScript.
+Built with Next.js 15 (App Router), React 19, and TypeScript.
 
 ## Features
 
@@ -38,7 +38,7 @@ Built with Next.js 16, React 19, and TypeScript.
 ```bash
 # Clone and install
 git clone https://github.com/cvsloane/infra-dashboard-oss.git
-cd infra-dashboard
+cd infra-dashboard-oss
 npm install
 
 # Configure
@@ -113,6 +113,8 @@ Browser <──── HTTPS ────> Next.js App (standalone)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/bullmq/queues` | GET | Get all queue stats |
+| `/api/bullmq/queues/[queue]/pause` | POST | Pause a queue |
+| `/api/bullmq/queues/[queue]/resume` | POST | Resume a queue |
 | `/api/bullmq/jobs/failed` | GET | Get failed jobs |
 | `/api/bullmq/jobs/failed` | POST | Retry/delete jobs |
 
@@ -123,6 +125,12 @@ Browser <──── HTTPS ────> Next.js App (standalone)
 | `/api/postgres/health` | GET | Database metrics |
 | `/api/servers/status` | GET | VPS and site health |
 | `/api/sse/updates` | GET | Real-time updates stream |
+
+### AutoHEAL
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/autoheal/config` | GET | Get AutoHEAL configuration |
+| `/api/autoheal/config` | POST | Save AutoHEAL configuration |
 
 ## Deployment
 
@@ -154,10 +162,6 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Development Status
-
-See [project_status.md](./project_status.md) for recent development activity and context.
 
 ## Development Status
 

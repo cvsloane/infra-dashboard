@@ -32,7 +32,7 @@ When deploying infra-dashboard:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
+| 0.1.x   | :white_check_mark: |
 
 ## Known Security Considerations
 
