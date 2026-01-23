@@ -36,14 +36,16 @@ Built with Next.js 16, React 19, and TypeScript.
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://github.com/cvsloane/infra-dashboard-oss.git
-cd infra-dashboard
+# Clone the repository
+git clone https://github.com/cvsloane/infra-dashboard-public.git
+cd infra-dashboard-public
+
+# Install dependencies
 npm install
 
-# Configure
+# Configure dashboard
 cp .env.example .env.local
-# Edit .env.local with your Coolify API credentials
+# Edit .env.local with your specific configuration
 
 # Run
 npm run dev
@@ -154,10 +156,6 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Development Status
-
-See [project_status.md](./project_status.md) for recent development activity and context.
 
 ## Development Status
 
