@@ -36,8 +36,8 @@ Feature requests are welcome! Please:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/infra-dashboard.git
-cd infra-dashboard
+git clone https://github.com/YOUR_USERNAME/infra-dashboard-oss.git
+cd infra-dashboard-oss
 
 # Install dependencies
 npm install
