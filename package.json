@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cvsloane/infra-dashboard-oss.git"
+    "url": "https://github.com/cvsloane/infra-dashboard-public.git"
   },
-  "homepage": "https://github.com/cvsloane/infra-dashboard-oss",
+  "homepage": "https://github.com/cvsloane/infra-dashboard-public",
   "bugs": {
-    "url": "https://github.com/cvsloane/infra-dashboard-oss/issues"
+    "url": "https://github.com/cvsloane/infra-dashboard-public/issues"
   },
   "author": "Chris Sloane",
   "keywords": [
