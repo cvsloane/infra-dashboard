@@ -16,7 +16,7 @@ Before you begin, ensure you have:
 ```bash
 # Clone the repository
 git clone https://github.com/cvsloane/infra-dashboard-oss.git
-cd infra-dashboard
+cd infra-dashboard-oss
 
 # Install dependencies
 npm install
