@@ -68,18 +68,21 @@ VPS_DATABASE_INSTANCE=192.168.1.101:9100
 ## Redis / BullMQ
 
 ### REDIS_URL
-**Optional** | Example: `redis://user:password@localhost:6379`
+**Not currently supported in dashboard** | Example: `redis://user:password@localhost:6379`
 
-Full Redis connection URL. Takes precedence over individual parameters.
+Full Redis connection URL.
+
+**Note:** REDIS_URL is supported in the autoheal bash script but not yet implemented in the dashboard Node.js code. For the dashboard, you must use the individual REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD parameters below.
 
 ```bash
-REDIS_URL=redis://default:mypassword@192.168.1.100:6379
+# Not supported yet - use individual parameters instead
+# REDIS_URL=redis://default:mypassword@192.168.1.100:6379
 ```
 
 ### REDIS_HOST
-**Optional** | Default: none | Example: `192.168.1.100`
+**Required for Redis features** | Default: `127.0.0.1` | Example: `192.168.1.100`
 
-Redis server hostname or IP.
+Redis server hostname or IP. Required if you want to use BullMQ queue monitoring or AutoHEAL.
 
 ```bash
 REDIS_HOST=192.168.1.100
@@ -104,12 +107,15 @@ REDIS_PASSWORD=your-redis-password
 ```
 
 ### REDIS_USERNAME
-**Optional** | Example: `default`
+**Not currently supported** | Example: `default`
 
 Redis username (for ACL-based authentication).
 
+**Note:** The dashboard code does not currently support REDIS_USERNAME. Only password-based authentication is implemented. If you need ACL-based authentication, this feature would need to be added to the code.
+
 ```bash
-REDIS_USERNAME=default
+# Not supported yet
+# REDIS_USERNAME=default
 ```
 
 ---

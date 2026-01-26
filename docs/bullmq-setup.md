@@ -20,14 +20,10 @@ infra-dashboard can monitor BullMQ queues running in Redis, showing:
 Add to your `.env.local`:
 
 ```bash
-# Option 1: Full connection URL
-REDIS_URL=redis://user:password@your-redis-host:6379
-
-# Option 2: Individual parameters
+# Use individual parameters (REDIS_URL not yet supported in dashboard):
 REDIS_HOST=your-redis-host
 REDIS_PORT=6379
 REDIS_PASSWORD=your-password  # if authentication is enabled
-REDIS_USERNAME=default        # optional, for ACL-based auth
 ```
 
 ## How It Works
