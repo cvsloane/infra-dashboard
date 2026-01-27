@@ -36,6 +36,10 @@ Built with Next.js 16, React 19, and TypeScript.
 ## Quick Start
 
 ```bash
+# Prerequisites
+# - Node.js 18+ installed
+# - NPM package manager
+
 # Clone and install
 git clone https://github.com/cvsloane/infra-dashboard-oss.git
 cd infra-dashboard
@@ -43,13 +47,22 @@ npm install
 
 # Configure
 cp .env.example .env.local
-# Edit .env.local with your Coolify API credentials
+# IMPORTANT: Edit .env.local with your:
+# - Coolify API credentials
+# - Prometheus URL
+# - Redis connection details
+# - Dashboard authentication (recommended)
 
-# Run
+# Run development server
 npm run dev
 ```
 
 Visit http://localhost:3000 to access the dashboard.
+
+### Notes
+- Ensure all required environment variables are configured
+- Some features require external services (Coolify, Prometheus, Redis)
+- See [Configuration](docs/configuration.md) for detailed setup
 
 ## Documentation
 
@@ -154,10 +167,6 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Development Status
-
-See [project_status.md](./project_status.md) for recent development activity and context.
 
 ## Development Status
 
