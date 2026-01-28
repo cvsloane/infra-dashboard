@@ -67,15 +67,6 @@ VPS_DATABASE_INSTANCE=192.168.1.101:9100
 
 ## Redis / BullMQ
 
-### REDIS_URL
-**Optional** | Example: `redis://user:password@localhost:6379`
-
-Full Redis connection URL. Takes precedence over individual parameters.
-
-```bash
-REDIS_URL=redis://default:mypassword@192.168.1.100:6379
-```
-
 ### REDIS_HOST
 **Optional** | Default: none | Example: `192.168.1.100`
 
