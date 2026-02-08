@@ -6,7 +6,9 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Real-time infrastructure monitoring dashboard for Coolify-managed applications, BullMQ job queues, PostgreSQL databases, and VPS servers. Built with Next.js 16, React 19, and TypeScript.
+**Your infrastructure, visible and actionable.**
+
+A real-time monitoring dashboard that brings together everything you run: Coolify deployments, BullMQ queues, PostgreSQL metrics, and VPS health—all in one unified view. Built with Next.js 16, React 19, and TypeScript for a fast, modern experience.
 
 ## Screenshots
 
@@ -39,44 +41,67 @@ npm run dev                 # http://localhost:3000
 
 ## Features
 
-- **📊 Overview Dashboard** — Unified view of infrastructure health at a glance
-- **🚀 Coolify Integration** — Application status, trigger/cancel deployments, real-time build logs
-- **📬 Queue Management** — BullMQ queue stats, worker health, retry/delete failed jobs (single or bulk), pause/resume queues
-- **🐘 PostgreSQL Monitoring** — Connection pools, PgBouncer stats, per-database metrics
-- **🖥️ Server Metrics** — CPU, memory, disk, load averages for app and database servers
-- **🔍 Site Health** — HTTP status and SSL certificate checks for all deployed applications
-- **⚙️ Worker Supervisor** — Systemd/PM2/Coolify worker health with auto-restart watchdog
-- **🩹 AutoHEAL** — Automatic remediation (restart + redeploy) for down sites
-- **🤖 Agents** — Run summaries and history for background automation agents
+| Feature | What It Does | Why It Helps |
+|---------|--------------|--------------|
+| **📊 Overview Dashboard** | Unified infrastructure health at a glance | Know the status of everything in seconds, not minutes |
+| **🚀 Coolify Integration** | App status, deployment control, real-time build logs | Manage deployments without leaving the dashboard |
+| **📬 Queue Management** | BullMQ stats, worker health, bulk job actions | Fix failed jobs and monitor queue performance |
+| **🐘 PostgreSQL Monitoring** | Connection pools, PgBouncer stats, per-database metrics | Spot database bottlenecks before they impact users |
+| **🖥️ Server Metrics** | CPU, memory, disk, load averages | Understand resource usage across your infrastructure |
+| **🔍 Site Health** | HTTP status and SSL certificate checks | Know immediately when sites go down or certificates expire |
+| **⚙️ Worker Supervisor** | Systemd/PM2/Coolify worker health monitoring | Ensure background jobs are always running |
+| **🩹 AutoHEAL** | Automatic restart/redeploy for failing services | Reduce downtime without manual intervention |
+| **🤖 Agents** | Background automation run tracking | Monitor scheduled tasks and maintenance jobs |
 
 ## Documentation
+
+Each guide is designed to be self-contained—start where you need help:
 
 | Guide | Description | When You Need It |
 |-------|-------------|------------------|
 | [Getting Started](docs/getting-started.md) | Installation and initial setup | First time setup |
-| [Configuration](docs/configuration.md) | Environment variables and config options | Customizing your setup |
-| [Coolify Setup](docs/coolify-setup.md) | Integrating with Coolify | Connecting to Coolify |
-| [Prometheus Setup](docs/prometheus-setup.md) | Metrics collection setup | Adding VPS/DB metrics |
+| [Configuration](docs/configuration.md) | Complete environment variable reference | Customizing your setup |
+| [Coolify Setup](docs/coolify-setup.md) | Deep dive into Coolify integration | Connecting to Coolify |
+| [Prometheus Setup](docs/prometheus-setup.md) | Metrics collection with exporters | Adding VPS/DB metrics |
 | [BullMQ Setup](docs/bullmq-setup.md) | Queue monitoring configuration | Monitoring job queues |
 | [AutoHEAL Setup](docs/autoheal.md) | Automatic recovery system | Enabling auto-remediation |
 
 ## Architecture
 
 ```
-Browser <──── HTTPS ────> Next.js App (standalone)
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-         SSE (15s)        API Routes       Direct DB
-              │                │                │
-         Coolify API      Prometheus       Coolify DB
-              │                │                │
-              └────────────────┼────────────────┘
-                               │
-         node_exporter   postgres_exp    pgbouncer_exp
+┌─────────┐     HTTPS      ┌─────────────────────────┐
+│ Browser │◄──────────────►│   Next.js App           │
+└─────────┘                │   (standalone build)    │
+                           └───────────┬─────────────┘
+                                       │
+              ┌────────────────────────┼────────────────────────┐
+              │                        │                        │
+              ▼                        ▼                        ▼
+        ┌──────────┐            ┌──────────┐           ┌─────────────┐
+        │  SSE     │            │  API     │           │  Direct DB  │
+        │  (15s)   │            │  Routes  │           │  Connection │
+        └────┬─────┘            └────┬─────┘           └──────┬──────┘
+             │                       │                        │
+             ▼                       ▼                        ▼
+       ┌──────────┐           ┌──────────┐            ┌─────────────┐
+       │ Coolify  │           │Prometheus│            │  Coolify    │
+       │   API    │           │          │            │    DB       │
+       └──────────┘           └────┬─────┘            └─────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              ▼                   ▼                   ▼
+        ┌──────────┐      ┌────────────┐      ┌────────────┐
+        │node_exp  │      │postgres_exp│      │pgbouncer_  │
+        │          │      │            │      │  exporter  │
+        └──────────┘      └────────────┘      └────────────┘
 
-         Redis ◄── BullMQ queues + AutoHEAL config
+                           ┌────────┐
+                           │ Redis  │◄──── BullMQ queues
+                           │        │      + AutoHEAL config
+                           └────────┘
 ```
+
+**Data flow:** The dashboard aggregates information from multiple sources. Coolify API provides application control, direct database queries enable real-time updates, Prometheus delivers metrics, and Redis powers queue monitoring.
 
 ## API Reference
 
@@ -134,9 +159,17 @@ Browser <──── HTTPS ────> Next.js App (standalone)
 
 ## Configuration
 
-See [`.env.example`](.env.example) and [`docs/configuration.md`](docs/configuration.md) for all options.
+The dashboard is configured entirely through environment variables. See [`.env.example`](.env.example) for a complete template and [`docs/configuration.md`](docs/configuration.md) for detailed explanations.
 
-> **Security note:** Always set `DASHBOARD_PASSWORD` in production.
+### Essential Variables
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `COOLIFY_API_URL` | Your Coolify API endpoint | Yes |
+| `COOLIFY_API_TOKEN` | API token for Coolify access | Yes |
+| `DASHBOARD_PASSWORD` | Protects the dashboard with authentication | Strongly recommended |
+
+> **Security note:** Always set `DASHBOARD_PASSWORD` in production. Never commit credentials to version control.
 
 ## Deployment
 
@@ -156,37 +189,49 @@ docker run -p 3000:3000 --env-file .env.local infra-dashboard
 
 ## Technical Details
 
-### SSE Real-Time Updates
+### Real-Time Updates with SSE
+
+The dashboard uses Server-Sent Events (SSE) to push updates to your browser without page refreshes:
 
 | Parameter | Value | Purpose |
 |-----------|-------|---------|
-| **Poll interval** | 15 seconds | Avoids Coolify API rate limiting |
-| **Heartbeat** | 5 seconds | Keeps connection alive through proxies |
-| **Reconnect** | Automatic | 3-second delay between attempts |
+| **Poll interval** | 15 seconds | Balances freshness with API rate limits |
+| **Heartbeat** | 5 seconds | Keeps connection alive through proxies and firewalls |
+| **Reconnect** | Automatic | 3-second delay with exponential backoff |
 
-### Worker Detection
+### How Worker Detection Works
 
-BullMQ workers are detected via `bull:*:stalled-check` TTL keys in Redis. A worker is marked **DOWN** after 5 consecutive check failures—not just a single missed heartbeat. This prevents false positives during brief network hiccups or temporary high load.
+BullMQ workers are detected via `bull:*:stalled-check` TTL keys in Redis. Rather than marking a worker DOWN on a single missed heartbeat, the dashboard waits for **5 consecutive failures**. This approach:
 
-### Database Connections
+- Prevents false positives during brief network hiccups
+- Handles temporary high load without alerting noise
+- Ensures genuine worker issues are caught reliably
 
-| Connection | Method | Purpose |
-|------------|--------|---------|
-| **Coolify DB** | Direct PostgreSQL | Real-time deployment tracking |
-| **App Metrics** | Prometheus queries | postgres_exporter and pgbouncer_exporter |
+### Database Connection Architecture
 
-### Authentication
+| Connection | Method | Purpose | Performance |
+|------------|--------|---------|-------------|
+| **Coolify DB** | Direct PostgreSQL | Real-time deployment tracking, site health | Sub-second updates |
+| **Metrics DB** | Prometheus queries | Time-series metrics, historical data | Optimized for analytics |
+| **Queue State** | Redis | BullMQ job states, worker status | Instant access |
 
-- Optional password protection via `DASHBOARD_PASSWORD`
-- Sessions stored as httpOnly cookies, valid for 7 days
-- Public endpoints: `/login`, `/api/health`
+### Authentication & Security
 
-## Development Status
+- **Password protection** — Optional but strongly recommended via `DASHBOARD_PASSWORD`
+- **Session management** — httpOnly cookies with 7-day expiration
+- **Public endpoints** — Only `/login` and `/api/health` are accessible without authentication
+- **Token storage** — All API tokens stay server-side in environment variables
 
-See [`project_status.md`](./project_status.md) for recent development activity and context.
+## Development & Community
+
+- **[Changelog](CHANGELOG.md)** — Recent updates and version history
+- **[Contributing Guide](CONTRIBUTING.md)** — How to report issues, suggest features, and submit PRs
+- **[Security Policy](SECURITY.md)** — Reporting vulnerabilities and best practices
+- **[Project Status](project_status.md)** — Auto-generated recent activity summary
 
 ---
 
 <p align="center">
-  Built with ❤️ for the self-hosting community
+  Built with ❤️ for the self-hosting community<br>
+  <sub>MIT License · <a href="https://github.com/cvsloane/infra-dashboard">GitHub</a> · <a href="https://github.com/cvsloane/infra-dashboard/issues">Issues</a></sub>
 </p>
