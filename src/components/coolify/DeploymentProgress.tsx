@@ -309,18 +309,28 @@ export function DeploymentProgress({ deployment, onCancel }: DeploymentProgressP
 interface DeploymentProgressListProps {
   deployments: DeploymentRecordClientWithLogs[];
   onCancel?: (deploymentUuid: string) => Promise<void> | void;
+  stats?: { queued: number; inProgress: number };
 }
 
-export function DeploymentProgressList({ deployments, onCancel }: DeploymentProgressListProps) {
+export function DeploymentProgressList({ deployments, onCancel, stats }: DeploymentProgressListProps) {
   if (deployments.length === 0) {
     return null;
   }
+
+  const inProgressCount = stats?.inProgress ?? deployments.filter(d => d.status === 'in_progress').length;
+  const queuedCount = stats?.queued ?? deployments.filter(d => d.status === 'queued').length;
+  const totalActive = inProgressCount + queuedCount;
 
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-        Deploying Now ({deployments.length})
+        <span>
+          {inProgressCount > 0 && `${inProgressCount} building`}
+          {inProgressCount > 0 && queuedCount > 0 && ', '}
+          {queuedCount > 0 && `${queuedCount} queued`}
+          {totalActive === 0 && 'Deploying Now'}
+        </span>
       </h3>
       <div className="space-y-2">
         {deployments.map((deployment) => (

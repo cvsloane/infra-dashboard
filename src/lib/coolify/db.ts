@@ -56,8 +56,9 @@ export async function getActiveDeployments(): Promise<DeploymentRecord[]> {
       logs
     FROM application_deployment_queues
     WHERE status IN ('queued', 'in_progress')
-    ORDER BY created_at DESC
-    LIMIT 10
+    ORDER BY
+      CASE WHEN status = 'in_progress' THEN 0 ELSE 1 END,
+      created_at ASC
   `;
 
   const result = await pool.query(query);

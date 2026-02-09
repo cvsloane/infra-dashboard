@@ -211,7 +211,11 @@ export default function CoolifyPage() {
       {activeDeployments.length > 0 && (
           <Card className="border-blue-500/30">
           <CardContent className="pt-4">
-            <DeploymentProgressList deployments={activeDeployments} onCancel={handleCancelDeployment} />
+            <DeploymentProgressList
+              deployments={activeDeployments}
+              onCancel={handleCancelDeployment}
+              stats={{ queued: stats.queued, inProgress: stats.inProgress }}
+            />
           </CardContent>
         </Card>
       )}
