@@ -465,7 +465,7 @@ export async function retryJob(queueName: string, jobId: string): Promise<boolea
   try {
     await job.retry('failed', opts);
     return true;
-  } catch (error) {
+  } catch {
     // If the job is in a different terminal state (e.g. completed), allow retry anyway.
     try {
       await job.retry('completed', opts);
@@ -524,13 +524,15 @@ export async function deleteAllFailed(queueName: string, limit?: number): Promis
   let processed = 0;
   for (const job of jobs) {
     if (!job) continue;
+    const jobId = job.id;
+    if (!jobId) continue;
     try {
-      const code = await queue.remove(job.id, { removeChildren: true });
+      const code = await queue.remove(jobId, { removeChildren: true });
       if (code === 1) {
         processed += 1;
       }
     } catch (error) {
-      console.error(`Failed to delete job ${queueName}/${job.id}:`, error);
+      console.error(`Failed to delete job ${queueName}/${jobId}:`, error);
     }
   }
 
