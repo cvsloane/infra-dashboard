@@ -65,6 +65,15 @@ export interface PoolHealth {
   max_connections: number;
 }
 
+export interface PostgresBackupMetrics {
+  walArchiveAgeSeconds: number | null;
+  logicalBackupAgeSeconds: number | null;
+  logicalBackupBytes: number | null;
+  restoreDrillAgeSeconds: number | null;
+  walgBasebackupAgeSeconds: number | null;
+  walgBasebackupLastCheckedAgeSeconds: number | null;
+}
+
 // API Client
 class PrometheusApiError extends Error {
   constructor(
@@ -152,6 +161,12 @@ async function queryPrometheusRange(
 function getValue(results: PrometheusResult[], defaultValue = 0): number {
   if (results.length === 0) return defaultValue;
   return parseFloat(results[0].value[1]) || defaultValue;
+}
+
+function getOptionalValue(results: PrometheusResult[]): number | null {
+  if (results.length === 0) return null;
+  const val = parseFloat(results[0].value[1]);
+  return Number.isFinite(val) ? val : null;
 }
 
 // Public API Functions
@@ -326,6 +341,45 @@ export async function getConnectionHistory(hours = 1): Promise<{ time: Date; con
   } catch (error) {
     console.error('Failed to get connection history:', error);
     return [];
+  }
+}
+
+export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics> {
+  try {
+    const [
+      walArchiveAge,
+      logicalAge,
+      logicalBytes,
+      restoreDrillAge,
+      walgBasebackupAge,
+      walgBasebackupCheckedAge,
+    ] = await Promise.all([
+      queryPrometheus('max(pg_stat_archiver_seconds_since_last_wal)'),
+      queryPrometheus('max(pg_backup_status_logical_backup_age_seconds)'),
+      queryPrometheus('max(pg_backup_status_logical_backup_last_success_bytes)'),
+      queryPrometheus('max(pg_backup_status_restore_drill_age_seconds)'),
+      queryPrometheus('max(pg_backup_status_walg_basebackup_age_seconds)'),
+      queryPrometheus('max(pg_backup_status_walg_basebackup_last_checked_age_seconds)'),
+    ]);
+
+    return {
+      walArchiveAgeSeconds: getOptionalValue(walArchiveAge),
+      logicalBackupAgeSeconds: getOptionalValue(logicalAge),
+      logicalBackupBytes: getOptionalValue(logicalBytes),
+      restoreDrillAgeSeconds: getOptionalValue(restoreDrillAge),
+      walgBasebackupAgeSeconds: getOptionalValue(walgBasebackupAge),
+      walgBasebackupLastCheckedAgeSeconds: getOptionalValue(walgBasebackupCheckedAge),
+    };
+  } catch (error) {
+    console.error('Failed to get Postgres backup metrics:', error);
+    return {
+      walArchiveAgeSeconds: null,
+      logicalBackupAgeSeconds: null,
+      logicalBackupBytes: null,
+      restoreDrillAgeSeconds: null,
+      walgBasebackupAgeSeconds: null,
+      walgBasebackupLastCheckedAgeSeconds: null,
+    };
   }
 }
 

@@ -8,7 +8,7 @@ import { QueueCard } from '@/components/queues/QueueCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Server, Database, Activity, AlertTriangle, Globe } from 'lucide-react';
+import { Server, Database, Activity, AlertTriangle, Globe, Archive } from 'lucide-react';
 import { useDashboard } from './layout';
 import { AgentsCard } from '@/components/agents/AgentsCard';
 import type { CoolifyDeployment } from '@/types';
@@ -38,6 +38,14 @@ interface OverviewData {
     message: string;
     connections: number;
     maxConnections: number;
+  };
+  backups: {
+    status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
+    message: string;
+    logicalAgeSec: number | null;
+    walAgeSec: number | null;
+    basebackupAgeSec: number | null;
+    restoreDrillAgeSec: number | null;
   };
   workerSupervisor: {
     status: 'ok' | 'error' | 'warning' | 'loading';
@@ -88,15 +96,19 @@ interface OverviewData {
   };
 }
 
-const formatDuration = (seconds?: number) => {
+const formatDuration = (seconds?: number | null) => {
   if (seconds === undefined) return '—';
+  if (seconds === null) return '—';
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const remaining = seconds % 60;
   if (minutes < 60) return `${minutes}m ${remaining}s`;
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours}h ${mins}m`;
+  if (hours < 24) return `${hours}h ${mins}m`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return `${days}d ${remHours}h`;
 };
 
 export default function OverviewPage() {
@@ -163,6 +175,7 @@ export default function OverviewPage() {
 
     const coolifyHealth = sseData.health?.coolify;
     const postgresHealth = sseData.postgres;
+    const backupsData = sseData.backups;
     const sitesData = sseData.sites;
     const workerSupervisor = sseData.workerSupervisor;
     const workerSummary = workerSupervisor?.summary || { total: 0, ok: 0, warning: 0, down: 0 };
@@ -200,6 +213,14 @@ export default function OverviewPage() {
         connections: postgresHealth?.connections.active || 0,
         maxConnections: postgresHealth?.connections.max || 100,
       },
+      backups: {
+        status: backupsData?.status ?? 'unknown',
+        message: backupsData?.message ?? 'No backup metrics',
+        logicalAgeSec: backupsData?.logical?.ageSec ?? null,
+        walAgeSec: backupsData?.wal?.ageSec ?? null,
+        basebackupAgeSec: backupsData?.basebackup?.ageSec ?? null,
+        restoreDrillAgeSec: backupsData?.restoreDrill?.ageSec ?? null,
+      },
       workerSupervisor: {
         status: workerStatus,
         message: workerMessage,
@@ -233,9 +254,10 @@ export default function OverviewPage() {
     if (isConnected) return;
     const fetchData = async () => {
       try {
-        const [coolifyRes, postgresRes, bullmqRes, sitesRes, workerRes] = await Promise.all([
+        const [coolifyRes, postgresRes, backupsRes, bullmqRes, sitesRes, workerRes] = await Promise.all([
           fetch('/api/coolify/applications'),
           fetch('/api/postgres/health'),
+          fetch('/api/postgres/backups'),
           fetch('/api/bullmq/queues'),
           fetch('/api/servers/status'),
           fetch('/api/workers/status'),
@@ -244,6 +266,7 @@ export default function OverviewPage() {
         const coolifyData = await coolifyRes.json();
         setApplicationCount(coolifyData.applications?.length || 0);
         const postgresData = await postgresRes.json();
+        const backupsData = backupsRes.ok ? await backupsRes.json() : null;
         const bullmqData = await bullmqRes.json();
         const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0 } };
         const workerData = workerRes.ok ? await workerRes.json() : { status: null };
@@ -307,6 +330,14 @@ export default function OverviewPage() {
             message: postgresData.message || 'Unable to connect to PostgreSQL',
             connections: postgresData.metrics?.pg_stat_activity_count || 0,
             maxConnections: postgresData.metrics?.pg_settings_max_connections || 100,
+          },
+          backups: {
+            status: backupsData?.status ?? 'unknown',
+            message: backupsData?.message ?? 'No backup metrics',
+            logicalAgeSec: backupsData?.logical?.ageSec ?? null,
+            walAgeSec: backupsData?.wal?.ageSec ?? null,
+            basebackupAgeSec: backupsData?.basebackup?.ageSec ?? null,
+            restoreDrillAgeSec: backupsData?.restoreDrill?.ageSec ?? null,
           },
           workerSupervisor: {
             status: workerStatus,
@@ -420,7 +451,7 @@ export default function OverviewPage() {
       )}
 
       {/* Status Cards */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatusCard
           title="Coolify"
           status={data?.coolify.status || 'loading'}
@@ -452,6 +483,18 @@ export default function OverviewPage() {
               label: 'Connections',
               value: `${data?.postgres.connections || 0}/${data?.postgres.maxConnections || 0}`,
             },
+          ]}
+        />
+        <StatusCard
+          title="DB Backups"
+          status={data?.backups.status || 'loading'}
+          message={data?.backups.message}
+          icon={Archive}
+          stats={[
+            { label: 'Logical', value: formatDuration(data?.backups.logicalAgeSec) },
+            { label: 'WAL', value: formatDuration(data?.backups.walAgeSec) },
+            { label: 'Base', value: formatDuration(data?.backups.basebackupAgeSec) },
+            { label: 'Drill', value: formatDuration(data?.backups.restoreDrillAgeSec) },
           ]}
         />
         <StatusCard

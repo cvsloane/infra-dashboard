@@ -5,6 +5,7 @@ import { healthCheck as prometheusHealth, getPostgresHealth, getPgBouncerHealth,
 import { healthCheck as redisHealth, getAllQueueStats } from '@/lib/redis/client';
 import { getWorkerSupervisorStatus } from '@/lib/redis/workers';
 import { quickHealthCheck } from '@/lib/health/sites';
+import { getPostgresBackupsSummary } from '@/lib/backups/postgres';
 
 // Polling interval in milliseconds (15s to avoid Coolify rate limiting)
 const POLL_INTERVAL = 15000;
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
             liveDeployments,
             postgres,
             pgbouncer,
+            backups,
             queues,
             vpsMetrics,
             siteHealth,
@@ -79,6 +81,7 @@ export async function GET(request: Request) {
             withTimeout(getLiveDeployments(), timeout, { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 } }),
             withTimeout(getPostgresHealth(), timeout, { up: false, connections: { active: 0, idle: 0, max: 100 }, databases: [] }),
             withTimeout(getPgBouncerHealth(), timeout, { up: false, pools: [], total_active: 0, total_waiting: 0 }),
+            withTimeout(getPostgresBackupsSummary(), timeout, null),
             withTimeout(getAllQueueStats(), timeout, []),
             withTimeout(getAllVPSMetrics(), timeout, { appsVps: null, dbVps: null }),
             withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sites: [] }),
@@ -112,6 +115,7 @@ export async function GET(request: Request) {
             deployments: deploymentsData,
             postgres: postgres.status === 'fulfilled' ? postgres.value : null,
             pgbouncer: pgbouncer.status === 'fulfilled' ? pgbouncer.value : null,
+            backups: backups.status === 'fulfilled' ? backups.value : null,
             queues: queues.status === 'fulfilled' ? queues.value : [],
             vps: vpsData,
             sites: sitesData,

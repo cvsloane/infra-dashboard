@@ -138,6 +138,14 @@ export interface DashboardUpdate {
     total_waiting: number;
     pools: Array<{ database: string; user: string; active: number; waiting: number }>;
   } | null;
+  backups?: {
+    status: 'ok' | 'warning' | 'error' | 'unknown';
+    message: string;
+    wal: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null };
+    logical: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null; bytes: number | null };
+    basebackup: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null; checkedAgeSec: number | null };
+    restoreDrill: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null };
+  } | null;
   queues?: Array<{
     name: string;
     waiting: number;
