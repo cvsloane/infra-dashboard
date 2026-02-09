@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Rocket,
   Database,
+  Archive,
   ListTodo,
   Server,
   Users,
@@ -32,6 +33,7 @@ const navGroups = [
       { name: 'Servers', href: '/servers', icon: Server },
       { name: 'Deployments', href: '/coolify', icon: Rocket },
       { name: 'Database', href: '/postgres', icon: Database },
+      { name: 'Backups', href: '/backups', icon: Archive },
     ],
   },
   {
