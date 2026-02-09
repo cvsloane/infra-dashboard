@@ -1,126 +1,31 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { StatusCard } from '@/components/dashboard/StatusCard';
 import { DeploymentCard } from '@/components/coolify/DeploymentCard';
 import { DeploymentProgressList } from '@/components/coolify/DeploymentProgress';
 import { QueueCard } from '@/components/queues/QueueCard';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Server, Database, Activity, AlertTriangle, Globe, Archive, Bell } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useDashboard } from './layout';
 import { AgentsCard } from '@/components/agents/AgentsCard';
 import type { CoolifyDeployment } from '@/types';
-import type { DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
-
-interface SiteHealth {
-  applicationUuid?: string;
-  name: string;
-  fqdn: string;
-  status: 'healthy' | 'degraded' | 'down' | 'unknown';
-  httpStatus?: number;
-  responseTimeMs?: number;
-  error?: string;
-  sslDaysRemaining?: number;
-}
-
-interface OverviewData {
-  alerts: {
-    status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
-    message: string;
-    firing: number;
-    suppressed: number;
-    critical: number;
-    warning: number;
-  };
-  coolify: {
-    status: 'ok' | 'error' | 'warning' | 'loading';
-    message: string;
-    applicationCount: number;
-    recentDeployments: CoolifyDeployment[];
-    activeDeployments: DeploymentRecordClient[];
-    stats: DeploymentStatsClient;
-  };
-  postgres: {
-    status: 'ok' | 'error' | 'warning' | 'loading';
-    message: string;
-    connections: number;
-    maxConnections: number;
-    metricsAgeSec: number | null;
-  };
-  backups: {
-    status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
-    message: string;
-    logicalAgeSec: number | null;
-    walAgeSec: number | null;
-    basebackupAgeSec: number | null;
-    restoreDrillAgeSec: number | null;
-  };
-  workerSupervisor: {
-    status: 'ok' | 'error' | 'warning' | 'loading';
-    message: string;
-    summary: {
-      total: number;
-      ok: number;
-      warning: number;
-      down: number;
-    };
-    stale?: boolean;
-    ageSec?: number;
-    items: Array<{
-      name: string;
-      source: 'systemd' | 'pm2' | 'docker';
-      status: 'ok' | 'warning' | 'down';
-      detail?: string;
-    }>;
-  };
-  bullmq: {
-    status: 'ok' | 'error' | 'warning' | 'loading';
-    message: string;
-    queues: Array<{
-      name: string;
-      waiting: number;
-      active: number;
-      completed: number;
-      failed: number;
-      delayed: number;
-      paused: number;
-      isPaused?: boolean;
-      workerActive?: boolean;
-      workerLastSeen?: number;
-      workerCount?: number;
-      workerHeartbeatMaxAgeSec?: number;
-      oldestWaitingAgeSec?: number;
-      jobsPerMin?: number;
-      failuresPerMin?: number;
-    }>;
-    totalFailed: number;
-    workersDown: number;
-  };
-  sites: {
-    status: 'ok' | 'error' | 'warning' | 'loading';
-    downSites: SiteHealth[];
-    totalSites: number;
-    healthySites: number;
-    sslExpiringSoonCount: number;
-  };
-}
-
-const formatDuration = (seconds?: number | null) => {
-  if (seconds === undefined) return '—';
-  if (seconds === null) return '—';
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remaining = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remaining}s`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours < 24) return `${hours}h ${mins}m`;
-  const days = Math.floor(hours / 24);
-  const remHours = hours % 24;
-  return `${days}d ${remHours}h`;
-};
+import type { DeploymentRecordClient } from '@/types/deployments';
+import type { OverviewData, OverviewSiteHealth } from '@/types/overview';
+import { formatDurationLong, formatDurationShort } from '@/lib/format';
+import { buildIssues } from '@/lib/issues/buildIssues';
+import { IssueInbox } from '@/components/dashboard/IssueInbox';
+import { CollapsibleSection } from '@/components/dashboard/CollapsibleSection';
+import { WidgetPicker } from '@/components/dashboard/widgets/WidgetPicker';
+import { WidgetTile } from '@/components/dashboard/widgets/WidgetTile';
+import {
+  DEFAULT_PINNED_WIDGET_IDS,
+  MAX_VISIBLE_WIDGETS,
+  normalizeWidgetIds,
+  PINNED_WIDGETS_STORAGE_KEY,
+  WIDGETS_BY_ID,
+  type WidgetId,
+} from '@/components/dashboard/widgets/registry';
 
 export default function OverviewPage() {
   const { data: sseData, isConnected } = useDashboard();
@@ -128,6 +33,27 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [applicationCount, setApplicationCount] = useState(0);
   const [isCancellingDeployment, setIsCancellingDeployment] = useState(false);
+  const [pinnedWidgetIds, setPinnedWidgetIds] = useState<WidgetId[]>(DEFAULT_PINNED_WIDGET_IDS);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PINNED_WIDGETS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      const ids = normalizeWidgetIds(parsed);
+      if (ids.length > 0) setPinnedWidgetIds(ids);
+    } catch {
+      // Ignore invalid JSON / storage access errors.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PINNED_WIDGETS_STORAGE_KEY, JSON.stringify(pinnedWidgetIds));
+    } catch {
+      // Ignore storage errors (private mode, quota, etc).
+    }
+  }, [pinnedWidgetIds]);
 
   const fetchApplicationCount = async () => {
     try {
@@ -189,6 +115,7 @@ export default function OverviewPage() {
     const backupsData = sseData.backups;
     const alertsData = sseData.alerts;
     const sitesData = sseData.sites;
+    const sitesList = sitesData?.sites || [];
     const workerSupervisor = sseData.workerSupervisor;
     const workerSummary = workerSupervisor?.summary || { total: 0, ok: 0, warning: 0, down: 0 };
     const workerStatus = workerSupervisor
@@ -202,7 +129,7 @@ export default function OverviewPage() {
       : 'warning';
     const workerMessage = workerSupervisor
       ? workerSupervisor.stale
-        ? `Stale update (${formatDuration(workerSupervisor.ageSec)})`
+        ? `Stale update (${formatDurationLong(workerSupervisor.ageSec)})`
         : `${workerSummary.ok}/${workerSummary.total} healthy`
       : 'No supervisor data';
 
@@ -214,6 +141,7 @@ export default function OverviewPage() {
         suppressed: alertsData?.suppressed ?? 0,
         critical: alertsData?.bySeverity?.critical ?? 0,
         warning: alertsData?.bySeverity?.warning ?? 0,
+        alerts: alertsData?.alerts ?? [],
       },
       coolify: {
         status: coolifyHealth?.ok ? 'ok' : 'error',
@@ -263,10 +191,12 @@ export default function OverviewPage() {
       },
       sites: {
         status: (sitesData?.downCount || 0) > 0 ? 'error' : (sitesData?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
-        downSites: (sitesData?.sites || []).filter((s: SiteHealth) => s.status === 'down'),
-        totalSites: sitesData?.sites?.length || 0,
-        healthySites: (sitesData?.sites || []).filter((s: SiteHealth) => s.status === 'healthy').length,
+        downSites: sitesList.filter((s) => s.status === 'down'),
+        allSites: sitesList,
+        totalSites: sitesList.length,
+        healthySites: sitesList.filter((s) => s.status === 'healthy').length,
         sslExpiringSoonCount: sitesData?.sslExpiringSoonCount || 0,
+        sslExpiryWarnDays: sitesData?.sslExpiryWarnDays ?? 14,
       },
     });
     setLoading(false);
@@ -293,6 +223,7 @@ export default function OverviewPage() {
         const alertsData = alertsRes.ok ? await alertsRes.json() : null;
         const bullmqData = await bullmqRes.json();
         const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0, sslExpiringSoonCount: 0 } };
+        const sitesList = sitesData.sites?.sites || [];
         const workerData = workerRes.ok ? await workerRes.json() : { status: null };
 
         // Fetch recent deployments (now includes active, recent, and stats)
@@ -334,7 +265,7 @@ export default function OverviewPage() {
           : 'warning';
         const workerMessage = workerSupervisor
           ? workerSupervisor.stale
-            ? `Stale update (${formatDuration(workerSupervisor.ageSec)})`
+            ? `Stale update (${formatDurationLong(workerSupervisor.ageSec)})`
             : `${workerSummary.ok}/${workerSummary.total} healthy`
           : 'No supervisor data';
 
@@ -346,6 +277,7 @@ export default function OverviewPage() {
             suppressed: alertsData?.suppressed ?? 0,
             critical: alertsData?.bySeverity?.critical ?? 0,
             warning: alertsData?.bySeverity?.warning ?? 0,
+            alerts: alertsData?.alerts ?? [],
           },
           coolify: {
             status: coolifyRes.ok ? 'ok' : 'error',
@@ -393,10 +325,12 @@ export default function OverviewPage() {
           },
           sites: {
             status: sitesData.sites?.downCount > 0 ? 'error' : (sitesData.sites?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
-            downSites: (sitesData.sites?.sites || []).filter((s: SiteHealth) => s.status === 'down'),
-            totalSites: sitesData.sites?.sites?.length || 0,
-            healthySites: (sitesData.sites?.sites || []).filter((s: SiteHealth) => s.status === 'healthy').length,
+            downSites: sitesList.filter((s: OverviewSiteHealth) => s.status === 'down'),
+            allSites: sitesList,
+            totalSites: sitesList.length,
+            healthySites: sitesList.filter((s: OverviewSiteHealth) => s.status === 'healthy').length,
             sslExpiringSoonCount: sitesData.sites?.sslExpiringSoonCount || 0,
+            sslExpiryWarnDays: sitesData.sites?.sslExpiryWarnDays ?? 14,
           },
         });
       } catch (error) {
@@ -411,236 +345,370 @@ export default function OverviewPage() {
     return () => clearInterval(interval);
   }, [isConnected]);
 
+  const visibleWidgetIds = pinnedWidgetIds.slice(0, MAX_VISIBLE_WIDGETS);
+
   if (loading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Infrastructure Overview</h1>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold">Overview</h1>
+            <p className="text-sm text-muted-foreground">Action-first health summary</p>
+          </div>
+          <WidgetPicker selected={pinnedWidgetIds} onChange={setPinnedWidgetIds} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {(visibleWidgetIds.length ? visibleWidgetIds : DEFAULT_PINNED_WIDGET_IDS).slice(0, MAX_VISIBLE_WIDGETS).map((id) => (
+            <Skeleton key={id} className="h-24" />
+          ))}
+        </div>
+
+        <Skeleton className="h-40" />
+
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-16" />
           ))}
         </div>
       </div>
     );
   }
 
+  const issues = buildIssues(data);
+
+  const firingAlerts = (data?.alerts.alerts || []).filter((a) => a.state === 'firing');
+  const deployStats = data?.coolify.stats || { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 };
+
   const queues = data?.bullmq.queues || [];
+  const topQueues = queues
+    .slice()
+    .sort((a, b) => {
+      const aScore = (a.failed || 0) * 1000 + (a.waiting || 0) * 10 + (a.active || 0);
+      const bScore = (b.failed || 0) * 1000 + (b.waiting || 0) * 10 + (b.active || 0);
+      return bScore - aScore;
+    })
+    .slice(0, 5);
+
   const workerAlerts = data?.workerSupervisor?.items.filter((item) => item.status !== 'ok') || [];
-  const workerAlertTone = data?.workerSupervisor?.stale
-    ? 'border-yellow-500/50 bg-yellow-500/10'
-    : 'border-red-500/50 bg-red-500/10';
-  const workerAlertIcon = data?.workerSupervisor?.stale ? 'text-yellow-500' : 'text-red-500';
+  const workerPanelTone = data?.workerSupervisor?.stale
+    ? 'border-yellow-500/30 bg-yellow-500/5'
+    : workerAlerts.length > 0
+    ? 'border-red-500/30 bg-red-500/5'
+    : 'border-border';
+  const workerPanelIcon = data?.workerSupervisor?.stale ? 'text-yellow-600' : 'text-red-600';
+
+  const sslWarnDays = data?.sites.sslExpiryWarnDays ?? 14;
+  const allSites = data?.sites.allSites || [];
+  const sitesNeedingAttention = allSites
+    .filter((s) => {
+      const sslSoon = typeof s.sslDaysRemaining === 'number' && s.sslDaysRemaining <= sslWarnDays;
+      return s.status !== 'healthy' || sslSoon;
+    })
+    .slice()
+    .sort((a, b) => {
+      const rank = (st: OverviewSiteHealth['status']) =>
+        st === 'down' ? 3 : st === 'degraded' ? 2 : st === 'unknown' ? 1 : 0;
+      const r = rank(b.status) - rank(a.status);
+      if (r !== 0) return r;
+      const aSsl = typeof a.sslDaysRemaining === 'number' ? a.sslDaysRemaining : 999999;
+      const bSsl = typeof b.sslDaysRemaining === 'number' ? b.sslDaysRemaining : 999999;
+      return aSsl - bSsl;
+    })
+    .slice(0, 8);
+
+  const sectionOpen = {
+    alerts: (data?.alerts.firing || 0) > 0,
+    deployments: (data?.coolify.activeDeployments?.length || 0) > 0 || deployStats.failedToday > 0,
+    queues: (data?.bullmq.workersDown || 0) > 0 || (data?.bullmq.totalFailed || 0) > 0 || workerAlerts.length > 0 || Boolean(data?.workerSupervisor?.stale),
+    sites: (data?.sites.downSites?.length || 0) > 0 || (data?.sites.sslExpiringSoonCount || 0) > 0,
+    data: (data?.postgres.status || 'unknown') !== 'ok' || (data?.backups.status || 'unknown') !== 'ok',
+  };
+
+  const alertBadge = (sev: 'critical' | 'warning' | 'info' | 'unknown') => {
+    if (sev === 'critical') return { variant: 'destructive' as const, className: '' };
+    if (sev === 'warning') return { variant: 'outline' as const, className: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/25' };
+    if (sev === 'info') return { variant: 'outline' as const, className: 'bg-muted text-muted-foreground border-border' };
+    return { variant: 'outline' as const, className: 'text-muted-foreground' };
+  };
+
+  const siteStatusBadge = (st: OverviewSiteHealth['status']) => {
+    if (st === 'down') return { variant: 'destructive' as const, className: '' };
+    if (st === 'degraded') return { variant: 'outline' as const, className: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/25' };
+    if (st === 'unknown') return { variant: 'outline' as const, className: 'text-muted-foreground' };
+    return { variant: 'outline' as const, className: 'bg-green-500/10 text-green-700 border-green-500/25' };
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Infrastructure Overview</h1>
-        {isConnected && (
-          <span className="flex items-center gap-2 text-sm text-green-500">
-            <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-            Live
-          </span>
-        )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold">Overview</h1>
+          <p className="text-sm text-muted-foreground">Action-first health summary</p>
+        </div>
+        <WidgetPicker selected={pinnedWidgetIds} onChange={setPinnedWidgetIds} />
       </div>
 
-      {/* Down Sites Alert - Show prominently when sites are down */}
-      {data?.sites.downSites && data.sites.downSites.length > 0 && (
-        <Card className="border-red-500/50 bg-red-500/10">
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <span className="font-semibold text-red-500">
-                {data.sites.downSites.length} Site{data.sites.downSites.length > 1 ? 's' : ''} Down
-              </span>
-            </div>
-            <div className="space-y-2">
-              {data.sites.downSites.map((site) => (
-                <div key={site.fqdn} className="flex items-center justify-between gap-2 p-2 rounded bg-red-500/10">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm truncate">{site.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {site.fqdn.replace('https://', '').replace('http://', '')}
-                    </div>
-                  </div>
-                  <Badge variant="destructive" className="shrink-0">
-                    {site.httpStatus || site.error || 'Unreachable'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Active Deployments - Show prominently when something is deploying */}
-      {data?.coolify.activeDeployments && data.coolify.activeDeployments.length > 0 && (
-        <Card className="border-blue-500/30 bg-blue-500/5">
-          <CardContent className="pt-4">
-            <DeploymentProgressList
-              deployments={data.coolify.activeDeployments}
-              onCancel={handleCancelDeployment}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {visibleWidgetIds.map((id) => {
+          const def = WIDGETS_BY_ID[id];
+          if (!def) return null;
+          const vm = def.getViewModel(data);
+          return (
+            <WidgetTile
+              key={id}
+              title={def.label}
+              href={def.href}
+              status={vm.status}
+              primary={vm.primary}
+              secondary={vm.secondary}
+              meta={vm.meta}
+              icon={def.icon}
             />
-          </CardContent>
-        </Card>
-      )}
+          );
+        })}
+      </div>
 
-      {/* Status Cards */}
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <StatusCard
-          title="Alerts"
-          status={data?.alerts.status || 'loading'}
-          message={data?.alerts.message}
-          icon={Bell}
-          stats={[
+      <IssueInbox issues={issues} />
+
+      <div className="space-y-3">
+        <CollapsibleSection
+          title="Alerting"
+          status={data?.alerts.status || 'unknown'}
+          href="/alerts"
+          defaultOpen={sectionOpen.alerts}
+          summary={[
             { label: 'Firing', value: data?.alerts.firing ?? 0 },
             { label: 'Crit', value: data?.alerts.critical ?? 0 },
             { label: 'Warn', value: data?.alerts.warning ?? 0 },
-            { label: 'Supp', value: data?.alerts.suppressed ?? 0 },
           ]}
-        />
-        <StatusCard
-          title="Coolify"
-          status={data?.coolify.status || 'loading'}
-          message={data?.coolify.message}
-          icon={Server}
-          stats={[
-            { label: 'Applications', value: data?.coolify.applicationCount || 0 },
-          ]}
-        />
-        <StatusCard
-          title="Sites"
-          status={data?.sites.status || 'loading'}
-          message={(data?.sites.downSites?.length ?? 0) > 0
-            ? `${data?.sites.downSites?.length} site${(data?.sites.downSites?.length ?? 0) > 1 ? 's' : ''} down`
-            : (data?.sites.sslExpiringSoonCount ?? 0) > 0
-            ? `${data?.sites.sslExpiringSoonCount} SSL expiring soon`
-            : `${data?.sites.healthySites ?? 0}/${data?.sites.totalSites ?? 0} healthy`}
-          icon={Globe}
-          stats={[
-            { label: 'Healthy', value: data?.sites.healthySites ?? 0 },
-            { label: 'Down', value: data?.sites.downSites?.length ?? 0 },
-            { label: 'SSL Soon', value: data?.sites.sslExpiringSoonCount ?? 0 },
-          ]}
-        />
-        <StatusCard
-          title="PostgreSQL"
-          status={data?.postgres.status || 'loading'}
-          message={data?.postgres.message}
-          icon={Database}
-          stats={[
-            {
-              label: 'Connections',
-              value: `${data?.postgres.connections || 0}/${data?.postgres.maxConnections || 0}`,
-            },
-            { label: 'Metrics', value: formatDuration(data?.postgres.metricsAgeSec) },
-          ]}
-        />
-        <StatusCard
-          title="DB Backups"
-          status={data?.backups.status || 'loading'}
-          message={data?.backups.message}
-          icon={Archive}
-          stats={[
-            { label: 'Logical', value: formatDuration(data?.backups.logicalAgeSec) },
-            { label: 'WAL', value: formatDuration(data?.backups.walAgeSec) },
-            { label: 'Base', value: formatDuration(data?.backups.basebackupAgeSec) },
-            { label: 'Drill', value: formatDuration(data?.backups.restoreDrillAgeSec) },
-          ]}
-        />
-        <StatusCard
-          title="Worker Supervisor"
-          status={data?.workerSupervisor?.status || 'loading'}
-          message={data?.workerSupervisor?.message}
-          icon={Activity}
-          stats={[
-            { label: 'Down', value: data?.workerSupervisor?.summary?.down || 0 },
-            { label: 'Warn', value: data?.workerSupervisor?.summary?.warning || 0 },
-          ]}
-        />
-        <StatusCard
-          title="BullMQ"
-          status={data?.bullmq.status || 'loading'}
-          message={data?.bullmq.message}
-          icon={Activity}
-          stats={[
-            { label: 'Queues', value: data?.bullmq.queues?.length || 0 },
-            { label: 'Workers Down', value: data?.bullmq.workersDown || 0 },
-            { label: 'Failed Jobs', value: data?.bullmq.totalFailed || 0 },
-          ]}
-        />
-      </div>
-
-      {/* Worker Supervisor Alert */}
-      {(data?.workerSupervisor?.stale || workerAlerts.length > 0) && (
-        <Card className={workerAlertTone}>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className={`h-5 w-5 ${workerAlertIcon}`} />
-              <span className="font-semibold">
-                {data?.workerSupervisor?.stale
-                  ? `Worker supervisor stale (${formatDuration(data?.workerSupervisor?.ageSec)})`
-                  : `${workerAlerts.length} worker issue${workerAlerts.length > 1 ? 's' : ''}`}
-              </span>
-            </div>
-            {workerAlerts.length > 0 ? (
-              <div className="space-y-2">
-                {workerAlerts.slice(0, 8).map((item) => (
-                  <div key={`${item.source}-${item.name}`} className="flex items-center justify-between gap-2 p-2 rounded bg-background/40">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium text-sm truncate">{item.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {item.source.toUpperCase()} {item.detail ? `• ${item.detail}` : ''}
+        >
+          {firingAlerts.length > 0 ? (
+            <div className="space-y-2">
+              {firingAlerts.slice(0, 6).map((a) => {
+                const key = a.fingerprint || `${a.name}-${a.startsAt || ''}`;
+                const b = alertBadge(a.severity);
+                const detail = a.summary || a.description || '—';
+                return (
+                  <div key={key} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-medium text-sm truncate">{a.name}</div>
+                        <Badge variant={b.variant} className={b.className}>
+                          {a.severity}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground truncate" title={detail}>
+                        {detail}
                       </div>
                     </div>
-                    <Badge variant={item.status === 'down' ? 'destructive' : 'secondary'} className="shrink-0">
-                      {item.status}
-                    </Badge>
+                    {a.startsAt && (
+                      <div className="text-xs text-muted-foreground shrink-0">
+                        {new Date(a.startsAt).toLocaleTimeString()}
+                      </div>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">{data?.alerts.message || 'No alert data'}</div>
+          )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Deployments"
+          status={data?.coolify.status || 'unknown'}
+          href="/coolify"
+          defaultOpen={sectionOpen.deployments}
+          summary={[
+            { label: 'In progress', value: deployStats.inProgress },
+            { label: 'Queued', value: deployStats.queued },
+            { label: 'Failed today', value: deployStats.failedToday },
+          ]}
+        >
+          {data?.coolify.activeDeployments && data.coolify.activeDeployments.length > 0 && (
+            <div className="rounded-lg border border-blue-500/25 bg-blue-500/5 p-3">
+              <DeploymentProgressList deployments={data.coolify.activeDeployments} onCancel={handleCancelDeployment} />
+            </div>
+          )}
+
+          <div className="mt-4 space-y-3">
+            <div className="font-semibold text-sm">Recent</div>
+            {data?.coolify.recentDeployments && data.coolify.recentDeployments.length > 0 ? (
+              <div className="space-y-3">
+                {data.coolify.recentDeployments.map((deployment) => (
+                  <DeploymentCard key={deployment.uuid} deployment={deployment} />
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No worker status updates received yet.</p>
+              <p className="text-sm text-muted-foreground">No recent deployments</p>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CollapsibleSection>
 
+        <CollapsibleSection
+          title="Queues & Workers"
+          status={data?.bullmq.status || 'unknown'}
+          href="/queues"
+          defaultOpen={sectionOpen.queues}
+          summary={[
+            { label: 'Workers down', value: data?.bullmq.workersDown ?? 0 },
+            { label: 'Failed', value: data?.bullmq.totalFailed ?? 0 },
+            { label: 'Queues', value: data?.bullmq.queues?.length ?? 0 },
+          ]}
+        >
+          {(data?.workerSupervisor?.stale || workerAlerts.length > 0) && (
+            <div className={`rounded-lg border p-3 ${workerPanelTone}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className={`h-4 w-4 ${workerPanelIcon}`} />
+                <span className="font-semibold text-sm">
+                  {data?.workerSupervisor?.stale
+                    ? `Worker supervisor stale (${formatDurationLong(data?.workerSupervisor?.ageSec)})`
+                    : `${workerAlerts.length} worker issue${workerAlerts.length > 1 ? 's' : ''}`}
+                </span>
+              </div>
+              {workerAlerts.length > 0 ? (
+                <div className="space-y-2">
+                  {workerAlerts.slice(0, 8).map((item) => (
+                    <div
+                      key={`${item.source}-${item.name}`}
+                      className="flex items-center justify-between gap-2 p-2 rounded bg-background/40"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm truncate">{item.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {item.source.toUpperCase()} {item.detail ? `• ${item.detail}` : ''}
+                        </div>
+                      </div>
+                      <Badge variant={item.status === 'down' ? 'destructive' : 'secondary'} className="shrink-0">
+                        {item.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No worker status updates received yet.</p>
+              )}
+            </div>
+          )}
 
-      {/* Recent Activity */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Deployments */}
-        <div className="space-y-4 min-w-0">
-          <h2 className="text-lg font-semibold">Recent Deployments</h2>
-          {data?.coolify.recentDeployments && data.coolify.recentDeployments.length > 0 ? (
-            <div className="space-y-3">
-              {data.coolify.recentDeployments.map((deployment) => (
-                <DeploymentCard key={deployment.uuid} deployment={deployment} />
-              ))}
+          <div className="mt-4 space-y-3">
+            <div className="font-semibold text-sm">Queues</div>
+            {topQueues.length > 0 ? (
+              <div className="space-y-3">
+                {topQueues.map((queue) => (
+                  <QueueCard key={queue.name} queue={queue} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No queues found</p>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Sites & TLS"
+          status={data?.sites.status || 'unknown'}
+          href="/servers"
+          defaultOpen={sectionOpen.sites}
+          summary={[
+            { label: 'Down', value: data?.sites.downSites?.length ?? 0 },
+            { label: 'SSL soon', value: data?.sites.sslExpiringSoonCount ?? 0 },
+            { label: 'Healthy', value: `${data?.sites.healthySites ?? 0}/${data?.sites.totalSites ?? 0}` },
+          ]}
+        >
+          {sitesNeedingAttention.length > 0 ? (
+            <div className="space-y-2">
+              {sitesNeedingAttention.map((site) => {
+                const key = `${site.fqdn}-${site.name}`;
+                const b = siteStatusBadge(site.status);
+                const host = site.fqdn.replace('https://', '').replace('http://', '');
+                const sslSoon = typeof site.sslDaysRemaining === 'number' && site.sslDaysRemaining <= sslWarnDays;
+                return (
+                  <div key={key} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-medium text-sm truncate">{site.name}</div>
+                        <Badge variant={b.variant} className={b.className}>
+                          {site.status}
+                        </Badge>
+                        {sslSoon && (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            SSL {site.sslDaysRemaining}d
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground truncate" title={host}>
+                        {host}
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      {site.status === 'down' && (
+                        <Badge variant="destructive">
+                          {site.httpStatus || site.error || 'Down'}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <p className="text-muted-foreground">No recent deployments</p>
+            <div className="text-sm text-muted-foreground">No sites needing attention.</div>
           )}
-        </div>
+        </CollapsibleSection>
 
-        {/* Queue Overview */}
-        <div className="space-y-4 min-w-0">
-          <h2 className="text-lg font-semibold">Queue Status</h2>
-          {queues.length > 0 ? (
-            <div className="space-y-3">
-              {queues.slice(0, 3).map((queue) => (
-                <QueueCard key={queue.name} queue={queue} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">No queues found</p>
-          )}
-        </div>
-      </div>
+        <CollapsibleSection
+          title="Data (Postgres & Backups)"
+          status={data?.postgres.status === 'error' || data?.backups.status === 'error' ? 'error' : data?.postgres.status === 'warning' || data?.backups.status === 'warning' ? 'warning' : 'ok'}
+          defaultOpen={sectionOpen.data}
+          summary={[
+            { label: 'Conn', value: `${data?.postgres.connections ?? 0}/${data?.postgres.maxConnections ?? 0}` },
+            { label: 'Scrape', value: formatDurationShort(data?.postgres.metricsAgeSec) },
+            { label: 'Backups', value: data?.backups.status ?? 'unknown' },
+          ]}
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {(() => {
+              const def = WIDGETS_BY_ID.postgres;
+              const vm = def.getViewModel(data);
+              return (
+                <WidgetTile
+                  title={def.label}
+                  href={def.href}
+                  status={vm.status}
+                  primary={vm.primary}
+                  secondary={vm.secondary}
+                  meta={vm.meta}
+                  icon={def.icon}
+                />
+              );
+            })()}
+            {(() => {
+              const def = WIDGETS_BY_ID.backups;
+              const vm = def.getViewModel(data);
+              return (
+                <WidgetTile
+                  title={def.label}
+                  href={def.href}
+                  status={vm.status}
+                  primary={vm.primary}
+                  secondary={vm.secondary}
+                  meta={vm.meta}
+                  icon={def.icon}
+                />
+              );
+            })()}
+          </div>
+          <div className="mt-3 text-xs text-muted-foreground">
+            Postgres: {data?.postgres.message || '—'} • Backups: {data?.backups.message || '—'}
+          </div>
+        </CollapsibleSection>
 
-      {/* Autonomous Agents */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Autonomous Agents</h2>
-        <AgentsCard />
+        <CollapsibleSection title="Autonomous Agents" status="unknown" defaultOpen={false}>
+          <AgentsCard />
+        </CollapsibleSection>
       </div>
     </div>
   );

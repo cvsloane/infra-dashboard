@@ -215,6 +215,7 @@ export interface DashboardUpdate {
     allHealthy: boolean;
     downCount: number;
     sslExpiringSoonCount?: number;
+    sslExpiryWarnDays?: number;
     sites: Array<{
       applicationUuid?: string;
       name: string;
