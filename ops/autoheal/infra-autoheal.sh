@@ -7,6 +7,13 @@ log() {
 }
 
 AUTOHEAL_CONFIG_KEY="${AUTOHEAL_CONFIG_KEY:-infra:autoheal:config}"
+AUTOHEAL_STATUS_KEY="${AUTOHEAL_STATUS_KEY:-infra:autoheal:status}"
+AUTOHEAL_STATUS_TTL_SEC="${AUTOHEAL_STATUS_TTL_SEC:-300}"
+AUTOHEAL_EVENTS_KEY="${AUTOHEAL_EVENTS_KEY:-infra:autoheal:events}"
+AUTOHEAL_EVENTS_MAX="${AUTOHEAL_EVENTS_MAX:-200}"
+
+HOSTNAME_VALUE="$(hostname)"
+RUN_AT="$(date -Is)"
 
 if [[ -z "${COOLIFY_API_URL:-}" ]]; then
   log "COOLIFY_API_URL is not set. Exiting."
@@ -58,8 +65,118 @@ redis_setex() {
   "${REDIS_CMD[@]}" SETEX "$1" "$2" "$3" >/dev/null 2>&1
 }
 
+redis_lpush() {
+  "${REDIS_CMD[@]}" LPUSH "$1" "$2" >/dev/null 2>&1
+}
+
+redis_ltrim() {
+  "${REDIS_CMD[@]}" LTRIM "$1" "$2" "$3" >/dev/null 2>&1
+}
+
 redis_del() {
   "${REDIS_CMD[@]}" DEL "$1" >/dev/null 2>&1
+}
+
+push_event() {
+  local action="$1"
+  local uuid="$2"
+  local name="$3"
+  local fqdn="$4"
+  local detail="${5:-}"
+  local http_code="${6:-}"
+
+  if (( AUTOHEAL_EVENTS_MAX <= 0 )); then
+    return 0
+  fi
+
+  local payload
+  payload="$(jq -nc \
+    --arg ts "$RUN_AT" \
+    --arg host "$HOSTNAME_VALUE" \
+    --arg action "$action" \
+    --arg uuid "$uuid" \
+    --arg name "$name" \
+    --arg fqdn "$fqdn" \
+    --arg detail "$detail" \
+    --arg httpCode "$http_code" \
+    '{
+      ts: $ts,
+      host: $host,
+      action: $action,
+      uuid: $uuid,
+      name: $name,
+      fqdn: $fqdn,
+      detail: (if $detail == "" then null else $detail end),
+      httpCode: (if $httpCode == "" then null else $httpCode end)
+    }' 2>/dev/null || true)"
+
+  if [[ -z "$payload" ]]; then
+    return 0
+  fi
+
+  redis_lpush "$AUTOHEAL_EVENTS_KEY" "$payload"
+  redis_ltrim "$AUTOHEAL_EVENTS_KEY" 0 $(( AUTOHEAL_EVENTS_MAX - 1 ))
+}
+
+write_status() {
+  local enabled="$1"
+  local enabled_sites_count="$2"
+  local config_updated_at="$3"
+  local checked="$4"
+  local healthy="$5"
+  local degraded="$6"
+  local unhealthy="$7"
+  local skipped_deploying="$8"
+  local cooldown_skips="$9"
+  local restarts_triggered="${10}"
+  local restarts_failed="${11}"
+  local redeploys_triggered="${12}"
+  local redeploys_failed="${13}"
+
+  local payload
+  payload="$(jq -nc \
+    --arg updatedAt "$RUN_AT" \
+    --arg host "$HOSTNAME_VALUE" \
+    --arg enabled "$enabled" \
+    --argjson enabledSitesCount "$enabled_sites_count" \
+    --arg configUpdatedAt "$config_updated_at" \
+    --argjson checked "$checked" \
+    --argjson healthy "$healthy" \
+    --argjson degraded "$degraded" \
+    --argjson unhealthy "$unhealthy" \
+    --argjson skippedDeploying "$skipped_deploying" \
+    --argjson cooldownSkips "$cooldown_skips" \
+    --argjson restartsTriggered "$restarts_triggered" \
+    --argjson restartsFailed "$restarts_failed" \
+    --argjson redeploysTriggered "$redeploys_triggered" \
+    --argjson redeploysFailed "$redeploys_failed" \
+    '{
+      version: 1,
+      host: $host,
+      updatedAt: $updatedAt,
+      enabled: ($enabled == "true"),
+      enabledSitesCount: $enabledSitesCount,
+      configUpdatedAt: (if $configUpdatedAt == "" then null else $configUpdatedAt end),
+      summary: {
+        checked: $checked,
+        healthy: $healthy,
+        degraded: $degraded,
+        unhealthy: $unhealthy,
+        skippedDeploying: $skippedDeploying,
+        cooldownSkips: $cooldownSkips,
+        restartsTriggered: $restartsTriggered,
+        restartsFailed: $restartsFailed,
+        redeploysTriggered: $redeploysTriggered,
+        redeploysFailed: $redeploysFailed
+      }
+    }' 2>/dev/null || true)"
+
+  if [[ -z "$payload" ]]; then
+    return 0
+  fi
+
+  # Set a heartbeat-style status so the dashboard can tell if the script is running.
+  redis_setex "$AUTOHEAL_STATUS_KEY" "$AUTOHEAL_STATUS_TTL_SEC" "$payload"
 }
 
 config_json=$(redis_get "$AUTOHEAL_CONFIG_KEY")
@@ -68,10 +185,7 @@ if [[ -z "$config_json" || "$config_json" == "nil" ]]; then
 fi
 
 enabled=$(echo "$config_json" | jq -r '.enabled // true')
-if [[ "$enabled" != "true" ]]; then
-  log "AutoHEAL disabled."
-  exit 0
-fi
+config_updated_at="$(echo "$config_json" | jq -r '.updatedAt // ""')"
 
 failure_threshold=$(echo "$config_json" | jq -r '.failureThreshold // 2')
 failure_window_sec=$(echo "$config_json" | jq -r '.failureWindowSec // 120')
@@ -81,8 +195,33 @@ redeploy_delay_sec=$(echo "$config_json" | jq -r '.redeployDelaySec // 90')
 redeploy_after_restart=$(echo "$config_json" | jq -r '.redeployAfterRestart // true')
 
 readarray -t enabled_sites < <(echo "$config_json" | jq -r '.enabledSites[]?')
+
+checked_count=0
+healthy_count=0
+degraded_count=0
+unhealthy_count=0
+skipped_deploying_count=0
+cooldown_skips_count=0
+restart_triggered_count=0
+restart_failed_count=0
+redeploy_triggered_count=0
+redeploy_failed_count=0
+
+if [[ "$enabled" != "true" ]]; then
+  log "AutoHEAL disabled."
+  write_status "false" "${#enabled_sites[@]}" "$config_updated_at" \
+    "$checked_count" "$healthy_count" "$degraded_count" "$unhealthy_count" \
+    "$skipped_deploying_count" "$cooldown_skips_count" \
+    "$restart_triggered_count" "$restart_failed_count" "$redeploy_triggered_count" "$redeploy_failed_count"
+  exit 0
+fi
+
 if [[ ${#enabled_sites[@]} -eq 0 ]]; then
   log "No enabled sites configured."
+  write_status "true" 0 "$config_updated_at" \
+    "$checked_count" "$healthy_count" "$degraded_count" "$unhealthy_count" \
+    "$skipped_deploying_count" "$cooldown_skips_count" \
+    "$restart_triggered_count" "$restart_failed_count" "$redeploy_triggered_count" "$redeploy_failed_count"
   exit 0
 fi
 
@@ -165,15 +304,18 @@ for uuid in "${enabled_sites[@]}"; do
   if [[ "$skip_when_deploying" == "true" ]]; then
     if [[ -n "${ACTIVE_IDS[$uuid]:-}" || -n "${ACTIVE_NAMES[${name,,}]:-}" ]]; then
       log "Skipping $name: deployment in progress."
+      skipped_deploying_count=$(( skipped_deploying_count + 1 ))
       redis_del "infra:autoheal:fail:$uuid"
       redis_del "infra:autoheal:phase:$uuid"
       continue
     fi
   fi
 
+  checked_count=$(( checked_count + 1 ))
   http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -I "$fqdn" || echo "000")
 
   if [[ "$http_code" =~ ^2|^3 ]]; then
+    healthy_count=$(( healthy_count + 1 ))
     redis_del "infra:autoheal:fail:$uuid"
     redis_del "infra:autoheal:phase:$uuid"
     redis_del "infra:autoheal:cooldown:$uuid"
@@ -182,11 +324,13 @@ for uuid in "${enabled_sites[@]}"; do
 
   if [[ "$http_code" =~ ^4 ]]; then
     log "Degraded $name ($http_code) - no autoheal."
+    degraded_count=$(( degraded_count + 1 ))
     redis_del "infra:autoheal:fail:$uuid"
     redis_del "infra:autoheal:phase:$uuid"
     continue
   fi
 
+  unhealthy_count=$(( unhealthy_count + 1 ))
   fail_key="infra:autoheal:fail:$uuid"
   phase_key="infra:autoheal:phase:$uuid"
   cooldown_key="infra:autoheal:cooldown:$uuid"
@@ -204,6 +348,7 @@ for uuid in "${enabled_sites[@]}"; do
     cooldown_state=$(redis_get "$cooldown_key")
     if [[ -n "$cooldown_state" && "$cooldown_state" != "nil" ]]; then
       log "Cooldown active for $name."
+      cooldown_skips_count=$(( cooldown_skips_count + 1 ))
       continue
     fi
   fi
@@ -214,6 +359,8 @@ for uuid in "${enabled_sites[@]}"; do
   if [[ -z "$phase" || "$phase" == "nil" ]]; then
     if restart_app "$uuid"; then
       log "Restart triggered for $name."
+      restart_triggered_count=$(( restart_triggered_count + 1 ))
+      push_event "restart_triggered" "$uuid" "$name" "$fqdn" "" "$http_code"
       if [[ "$redeploy_after_restart" == "true" ]]; then
         ttl=$(( redeploy_delay_sec > 0 ? redeploy_delay_sec * 3 : 300 ))
         redis_setex "$phase_key" "$ttl" "restart|$now_ts"
@@ -222,6 +369,8 @@ for uuid in "${enabled_sites[@]}"; do
       fi
     else
       log "Restart failed for $name."
+      restart_failed_count=$(( restart_failed_count + 1 ))
+      push_event "restart_failed" "$uuid" "$name" "$fqdn" "" "$http_code"
     fi
     continue
   fi
@@ -232,10 +381,14 @@ for uuid in "${enabled_sites[@]}"; do
       if (( now_ts - phase_ts >= redeploy_delay_sec )); then
         if redeploy_app "$uuid"; then
           log "Redeploy triggered for $name."
+          redeploy_triggered_count=$(( redeploy_triggered_count + 1 ))
+          push_event "redeploy_triggered" "$uuid" "$name" "$fqdn" "" "$http_code"
           redis_del "$phase_key"
           (( cooldown_sec > 0 )) && redis_setex "$cooldown_key" "$cooldown_sec" "redeploy"
         else
           log "Redeploy failed for $name."
+          redeploy_failed_count=$(( redeploy_failed_count + 1 ))
+          push_event "redeploy_failed" "$uuid" "$name" "$fqdn" "" "$http_code"
         fi
       else
         log "Waiting to redeploy $name (delay not met)."
@@ -244,3 +397,8 @@ for uuid in "${enabled_sites[@]}"; do
   fi
 
 done
+
+write_status "true" "${#enabled_sites[@]}" "$config_updated_at" \
+  "$checked_count" "$healthy_count" "$degraded_count" "$unhealthy_count" \
+  "$skipped_deploying_count" "$cooldown_skips_count" \
+  "$restart_triggered_count" "$restart_failed_count" "$redeploy_triggered_count" "$redeploy_failed_count"

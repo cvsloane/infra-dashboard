@@ -144,6 +144,8 @@ Enable AutoHEAL for specific applications by their Coolify UUID:
 | Key | Purpose |
 |-----|---------|
 | `infra:autoheal:config` | JSON configuration from dashboard |
+| `infra:autoheal:status` | Heartbeat/status JSON written by the worker (SETEX) |
+| `infra:autoheal:events` | Recent action log (Redis list) |
 | `infra:autoheal:fail:{uuid}` | Failure counter (with TTL) |
 | `infra:autoheal:phase:{uuid}` | Current healing phase |
 | `infra:autoheal:cooldown:{uuid}` | Cooldown marker (with TTL) |
@@ -183,6 +185,17 @@ sudo systemctl status infra-autoheal.service
 # Check for errors
 journalctl -u infra-autoheal -n 50
 ```
+
+If your dashboard shows **"No heartbeat"**, verify the worker is writing `infra:autoheal:status`:
+
+```bash
+redis-cli GET infra:autoheal:status
+redis-cli TTL infra:autoheal:status
+```
+
+If you changed key names in the worker via env vars, ensure the infra-dashboard env matches:
+- `AUTOHEAL_STATUS_KEY` (default `infra:autoheal:status`)
+- `AUTOHEAL_EVENTS_KEY` (default `infra:autoheal:events`)
 
 ### "Config not loading"
 
