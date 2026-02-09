@@ -1,154 +1,314 @@
 # Prometheus Setup Guide
 
-This guide explains how to set up Prometheus metrics collection for VPS and database monitoring.
+Learn how to collect and visualize system metrics from your VPS and databases using Prometheus. This guide covers installation, configuration, and troubleshooting for the complete metrics pipeline.
 
 ## Overview
 
-infra-dashboard queries Prometheus to display:
-- **VPS Metrics** - CPU, memory, disk, load average
-- **PostgreSQL Metrics** - Connections, database sizes
-- **PgBouncer Metrics** - Connection pool status
+Prometheus is a time-series database that collects metrics from your infrastructure. The dashboard queries Prometheus to display:
+
+| Metric Type | What You See | Source |
+|-------------|--------------|--------|
+| **VPS Metrics** | CPU, memory, disk, load average | node_exporter |
+| **PostgreSQL Metrics** | Connections, database sizes, query stats | postgres_exporter |
+| **PgBouncer Metrics** | Connection pool utilization | pgbouncer_exporter |
+| **PostgreSQL Backups** | Logical/WAL/base backup freshness + restore drill recency | postgres_exporter (custom queries) |
+
+**Why Prometheus?** It's the industry standard for metrics collection, with excellent exporter ecosystem and powerful query language (PromQL).
 
 ## Architecture
 
 ```
-infra-dashboard
-      │
-      ▼
-  Prometheus  ◄── Scrapes metrics from:
-      │
-      ├── node_exporter (VPS system metrics)
-      ├── postgres_exporter (PostgreSQL metrics)
-      └── pgbouncer_exporter (Connection pool metrics)
+                    ┌─────────────────────────────────────────┐
+                    │           infra-dashboard               │
+                    │                                         │
+                    │  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+                    │  │ VPS      │  │ PostgreSQL│  │PgBouncer│ │
+                    │  │ Panel    │  │ Panel     │  │ Panel   │ │
+                    │  └────┬─────┘  └────┬─────┘  └────┬───┘ │
+                    │       │             │             │      │
+                    │       └─────────────┴─────────────┘      │
+                    │                    │                      │
+                    │                    ▼                      │
+                    │           ┌──────────────┐                │
+                    │           │   PromQL     │                │
+                    │           │   Queries    │                │
+                    │           └──────┬───────┘                │
+                    └──────────────────┼────────────────────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────┐
+                              │   Prometheus    │
+                              │   Server        │
+                              │   (Port 9090)   │
+                              └────────┬────────┘
+                                       │
+              ┌────────────────────────┼────────────────────────┐
+              │                        │                        │
+              ▼                        ▼                        ▼
+        ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+        │ node_exporter│      │postgres_exporter│   │pgbouncer_    │
+        │ (Port 9100)  │      │ (Port 9187)  │      │ exporter     │
+        │              │      │              │      │ (Port 9127)  │
+        │  VPS/Server  │      │  PostgreSQL  │      │  PgBouncer   │
+        └──────────────┘      └──────────────┘      └──────────────┘
 ```
+
+**Data flow:** Exporters expose metrics → Prometheus scrapes and stores → Dashboard queries and displays
 
 ## Step 1: Install Prometheus
 
-### Docker Compose
+### Option A: Docker Compose (Recommended)
+
+Create a `docker-compose.yml` file:
 
 ```yaml
 # docker-compose.yml
 services:
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=30d'
+    restart: unless-stopped
+    networks:
+      - monitoring
 
 volumes:
   prometheus_data:
+
+networks:
+  monitoring:
+    driver: bridge
 ```
 
-### Prometheus Configuration
+**Start Prometheus:**
+```bash
+docker compose up -d
+```
+
+**Verify it's running:**
+```bash
+curl http://localhost:9090/-/healthy
+# Should return: Prometheus Server is Healthy.
+```
+
+### Create Prometheus Configuration
+
+Create `prometheus.yml` in the same directory:
 
 ```yaml
 # prometheus.yml
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 15s      # How often to scrape targets
+  evaluation_interval: 15s  # How often to evaluate rules
+  external_labels:
+    monitor: 'infra-dashboard'
 
 scrape_configs:
-  # VPS metrics
+  # ═══════════════════════════════════════════════════
+  # VPS System Metrics (node_exporter)
+  # ═══════════════════════════════════════════════════
   - job_name: 'node'
     static_configs:
       - targets:
-        - 'primary-server:9100'   # Your app server
-        - 'database-server:9100'  # Your database server
+        - '192.168.1.100:9100'   # Your app server
+        - '192.168.1.101:9100'   # Your database server (if separate)
+        labels:
+          group: 'vps'
 
-  # PostgreSQL metrics
+  # ═══════════════════════════════════════════════════
+  # PostgreSQL Metrics
+  # ═══════════════════════════════════════════════════
   - job_name: 'postgres'
     static_configs:
-      - targets: ['database-server:9187']
+      - targets: ['192.168.1.101:9187']
+        labels:
+          instance: 'database-server'
 
-  # PgBouncer metrics
+  # ═══════════════════════════════════════════════════
+  # PgBouncer Connection Pool Metrics
+  # ═══════════════════════════════════════════════════
   - job_name: 'pgbouncer'
     static_configs:
-      - targets: ['database-server:9127']
+      - targets: ['192.168.1.101:9127']
+        labels:
+          instance: 'database-server'
 ```
+
+> **Important:** Replace IP addresses with your actual server addresses. The targets must match what you configure in `VPS_PRIMARY_INSTANCE` and `VPS_DATABASE_INSTANCE`.
 
 ## Step 2: Install Exporters
 
-### node_exporter (VPS Metrics)
+Exporters run on your servers and expose metrics in a format Prometheus can scrape.
 
-Install on each server you want to monitor:
+### node_exporter (VPS System Metrics)
+
+Install on every server you want to monitor—both application and database servers.
+
+**Quick install script:**
 
 ```bash
-# Download
-wget https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz
-tar xvfz node_exporter-1.7.0.linux-amd64.tar.gz
-sudo mv node_exporter-1.7.0.linux-amd64/node_exporter /usr/local/bin/
+#!/bin/bash
+# install-node-exporter.sh
+
+VERSION="1.7.0"
+ARCH="linux-amd64"
+
+# Download and extract
+wget https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/node_exporter-${VERSION}.${ARCH}.tar.gz
+tar xvfz node_exporter-${VERSION}.${ARCH}.tar.gz
+
+# Install binary
+sudo mv node_exporter-${VERSION}.${ARCH}/node_exporter /usr/local/bin/
+rm -rf node_exporter-${VERSION}.${ARCH}*
 
 # Create systemd service
-sudo cat > /etc/systemd/system/node_exporter.service << 'EOF'
+sudo tee /etc/systemd/system/node_exporter.service > /dev/null << 'EOF'
 [Unit]
 Description=Node Exporter
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/node_exporter
+User=node_exporter
+Group=node_exporter
+ExecStart=/usr/local/bin/node_exporter \
+  --collector.filesystem.mount-points-exclude='^/(sys|proc|dev|run|var/lib/docker)($|/)'
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Create user (optional but recommended)
+sudo useradd -rs /bin/false node_exporter 2>/dev/null || true
+
 # Start service
 sudo systemctl daemon-reload
 sudo systemctl enable --now node_exporter
+
+# Verify
+sudo systemctl status node_exporter
 ```
 
-Verify it's running: `curl http://localhost:9100/metrics`
+**Test it's working:**
+```bash
+curl -s http://localhost:9100/metrics | head -20
+```
+
+You should see metrics like `node_cpu_seconds_total`, `node_memory_MemTotal_bytes`, etc.
 
 ### postgres_exporter (PostgreSQL Metrics)
 
+Collects database performance metrics: connections, query statistics, database sizes, and more.
+
+**Option A: Docker (Easiest)**
+
 ```bash
-# Using Docker
 docker run -d \
   --name postgres_exporter \
+  --network host \
   -p 9187:9187 \
-  -e DATA_SOURCE_NAME="postgresql://user:pass@localhost:5432/postgres?sslmode=disable" \
+  -e DATA_SOURCE_NAME="postgresql://user:password@localhost:5432/postgres?sslmode=disable" \
   prometheuscommunity/postgres-exporter
 ```
 
-Or with Docker Compose:
+**Option B: Docker Compose**
+
 ```yaml
-postgres_exporter:
-  image: prometheuscommunity/postgres-exporter
-  environment:
-    DATA_SOURCE_NAME: "postgresql://user:pass@postgres:5432/postgres?sslmode=disable"
-  ports:
-    - "9187:9187"
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://user:password@postgres:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    restart: unless-stopped
+    networks:
+      - monitoring
+```
+
+**Required database user:**
+
+```sql
+-- Connect to PostgreSQL as superuser
+CREATE USER prometheus WITH PASSWORD 'your-password';
+GRANT pg_monitor TO prometheus;
+```
+
+**Verify it's working:**
+```bash
+curl -s http://localhost:9187/metrics | grep pg_stat_activity_count
 ```
 
 ### pgbouncer_exporter (PgBouncer Metrics)
 
+Monitors connection pool utilization—critical for understanding database connection bottlenecks.
+
+**Docker:**
+
 ```bash
-# Using Docker
 docker run -d \
   --name pgbouncer_exporter \
+  --network host \
   -p 9127:9127 \
   prometheuscommunity/pgbouncer-exporter \
-  --pgBouncer.connectionString="postgres://pgbouncer:pass@localhost:6432/pgbouncer?sslmode=disable"
+  --pgBouncer.connectionString="postgres://pgbouncer:password@localhost:6432/pgbouncer?sslmode=disable"
+```
+
+**Docker Compose:**
+
+```yaml
+  pgbouncer_exporter:
+    image: prometheuscommunity/pgbouncer-exporter
+    container_name: pgbouncer_exporter
+    command:
+      - '--pgBouncer.connectionString=postgres://pgbouncer:password@pgbouncer:6432/pgbouncer?sslmode=disable'
+    ports:
+      - "9127:9127"
+    restart: unless-stopped
+    networks:
+      - monitoring
+```
+
+**Verify it's working:**
+```bash
+curl -s http://localhost:9127/metrics | grep pgbouncer_pools_client_active_connections
 ```
 
 ## Step 3: Configure infra-dashboard
 
-Add to your `.env.local`:
+Add these variables to your `.env.local`:
 
 ```bash
-# Prometheus server
-PROMETHEUS_URL=http://your-prometheus-server:9090
+# ═══════════════════════════════════════════════════
+# PROMETHEUS
+# ═══════════════════════════════════════════════════
+PROMETHEUS_URL=http://192.168.1.100:9090
 
-# VPS instances (must match targets in prometheus.yml)
-VPS_PRIMARY_INSTANCE=primary-server:9100
-VPS_DATABASE_INSTANCE=database-server:9100
+# VPS instances (must match targets in prometheus.yml exactly)
+VPS_PRIMARY_INSTANCE=192.168.1.100:9100
+VPS_DATABASE_INSTANCE=192.168.1.101:9100
+```
+
+**Critical:** The `VPS_*_INSTANCE` values must **exactly match** the targets in your `prometheus.yml`. If your prometheus.yml has `192.168.1.100:9100`, use that—not a hostname or different IP.
+
+**Verify the connection:**
+```bash
+# Test Prometheus is reachable
+curl "http://192.168.1.100:9090/api/v1/query?query=up"
+
+# Test specific instance query
+curl "http://192.168.1.100:9090/api/v1/query?query=node_cpu_seconds_total"
 ```
 
 ## Metrics Displayed
@@ -170,6 +330,18 @@ VPS_DATABASE_INSTANCE=database-server:9100
 | Connection Count | postgres_exporter | `pg_stat_activity_count` |
 | Database Size | postgres_exporter | `pg_database_size_bytes` |
 | Max Connections | postgres_exporter | `pg_settings_max_connections` |
+
+### PostgreSQL Backup Freshness (Optional)
+
+The dashboard can surface backup freshness and restore drill recency if your `postgres_exporter` exposes these metrics (typically via a custom `queries.yaml` plus a script that records last-success timestamps somewhere Postgres can read).
+
+| Signal | Query | Notes |
+|--------|-------|-------|
+| WAL archive freshness | `pg_stat_archiver_seconds_since_last_wal` | Seconds since last archived WAL segment |
+| Logical dump freshness | `pg_backup_status_logical_backup_age_seconds` | Seconds since last successful `pg_dumpall` |
+| Restore drill freshness | `pg_backup_status_restore_drill_age_seconds` | Seconds since last successful restore drill |
+| WAL-G base backup age | `pg_backup_status_walg_basebackup_age_seconds` | Seconds since latest base backup (from `wal-g backup-list`) |
+| Base backup check age | `pg_backup_status_walg_basebackup_last_checked_age_seconds` | Seconds since the base backup monitor last ran |
 
 ### PgBouncer Panel
 
