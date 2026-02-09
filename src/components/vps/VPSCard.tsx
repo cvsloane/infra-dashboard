@@ -7,6 +7,7 @@ import { Server, Cpu, HardDrive, MemoryStick, Clock } from 'lucide-react';
 
 interface VPSMetrics {
   hostname: string;
+  metricsAgeSeconds?: number | null;
   cpu: {
     usagePercent: number;
     cores: number;
@@ -53,6 +54,16 @@ function formatUptime(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function formatDuration(seconds?: number | null): string {
+  if (seconds === undefined || seconds === null) return '—';
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s}s`;
+  const minutes = Math.floor(s / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h`;
+}
+
 function getStatusColor(percent: number): string {
   if (percent < 60) return 'text-green-500';
   if (percent < 80) return 'text-yellow-500';
@@ -91,6 +102,9 @@ export function VPSCard({ name, metrics }: VPSCardProps) {
                     metrics.memory.usedPercent < 80 &&
                     metrics.disk.usedPercent < 80;
 
+  const metricsAge = metrics.metricsAgeSeconds ?? null;
+  const metricsStale = typeof metricsAge === 'number' && metricsAge > 120;
+
   return (
     <Card className={isHealthy ? 'border-green-500/30' : 'border-yellow-500/30'}>
       <CardHeader className="pb-2">
@@ -100,6 +114,12 @@ export function VPSCard({ name, metrics }: VPSCardProps) {
             {name}
           </CardTitle>
           <div className="flex items-center gap-2">
+            {metricsAge !== null && (
+              <Badge variant={metricsStale ? 'secondary' : 'outline'} className="gap-1">
+                <Clock className="h-3 w-3" />
+                Metrics {formatDuration(metricsAge)}
+              </Badge>
+            )}
             <Badge variant={isHealthy ? 'default' : 'secondary'} className="gap-1">
               <Clock className="h-3 w-3" />
               {formatUptime(metrics.uptime)}

@@ -32,6 +32,7 @@ export interface PrometheusQueryResponse {
 
 export interface PostgresHealth {
   up: boolean;
+  metricsAgeSeconds?: number | null;
   connections: {
     active: number;
     idle: number;
@@ -50,6 +51,7 @@ export interface DatabaseHealth {
 
 export interface PgBouncerHealth {
   up: boolean;
+  metricsAgeSeconds?: number | null;
   pools: PoolHealth[];
   total_active: number;
   total_waiting: number;
@@ -169,6 +171,16 @@ function getOptionalValue(results: PrometheusResult[]): number | null {
   return Number.isFinite(val) ? val : null;
 }
 
+function getSampleAgeSeconds(results: PrometheusResult[]): number | null {
+  if (results.length === 0) return null;
+  const nowSec = Date.now() / 1000;
+  const ages = results
+    .map((r) => nowSec - r.value[0])
+    .filter((v) => Number.isFinite(v) && v >= 0);
+  if (ages.length === 0) return null;
+  return Math.max(...ages);
+}
+
 // Public API Functions
 
 export async function getPostgresHealth(): Promise<PostgresHealth> {
@@ -176,6 +188,7 @@ export async function getPostgresHealth(): Promise<PostgresHealth> {
     // Check if Postgres is up
     const upResult = await queryPrometheus('pg_up');
     const up = getValue(upResult) === 1;
+    const metricsAgeSeconds = getSampleAgeSeconds(upResult);
 
     // Get PgBouncer connection counts (this is what apps actually use)
     // Fall back to direct Postgres stats if PgBouncer not available
@@ -238,6 +251,7 @@ export async function getPostgresHealth(): Promise<PostgresHealth> {
 
     return {
       up,
+      metricsAgeSeconds,
       connections: {
         active: activeConns,
         idle: idleConns,
@@ -249,6 +263,7 @@ export async function getPostgresHealth(): Promise<PostgresHealth> {
     console.error('Failed to get Postgres health:', error);
     return {
       up: false,
+      metricsAgeSeconds: null,
       connections: { active: 0, idle: 0, max: 100 },
       databases: [],
     };
@@ -260,6 +275,7 @@ export async function getPgBouncerHealth(): Promise<PgBouncerHealth> {
     // Check if PgBouncer exporter is up
     const upResult = await queryPrometheus('pgbouncer_up');
     const up = getValue(upResult) === 1;
+    const metricsAgeSeconds = getSampleAgeSeconds(upResult);
 
     // Get pool stats
     const activeResult = await queryPrometheus('pgbouncer_pools_client_active_connections');
@@ -304,6 +320,7 @@ export async function getPgBouncerHealth(): Promise<PgBouncerHealth> {
 
     return {
       up,
+      metricsAgeSeconds,
       pools,
       total_active: totalActive,
       total_waiting: totalWaiting,
@@ -312,6 +329,7 @@ export async function getPgBouncerHealth(): Promise<PgBouncerHealth> {
     console.error('Failed to get PgBouncer health:', error);
     return {
       up: false,
+      metricsAgeSeconds: null,
       pools: [],
       total_active: 0,
       total_waiting: 0,
@@ -399,6 +417,7 @@ export async function healthCheck(): Promise<{ ok: boolean; message: string }> {
 // VPS System Metrics (requires node_exporter)
 export interface VPSMetrics {
   hostname: string;
+  metricsAgeSeconds?: number | null;
   cpu: {
     usagePercent: number;
     cores: number;
@@ -453,6 +472,7 @@ export async function getVPSMetrics(instance: string): Promise<VPSMetrics | null
 
     // Uptime
     const bootTime = await queryPrometheus(`node_boot_time_seconds{instance="${instance}"}`);
+    const metricsAgeSeconds = getSampleAgeSeconds(bootTime);
 
     const totalMem = getValue(memTotal);
     const availMem = getValue(memAvailable);
@@ -461,6 +481,7 @@ export async function getVPSMetrics(instance: string): Promise<VPSMetrics | null
 
     return {
       hostname: instance.split(':')[0],
+      metricsAgeSeconds,
       cpu: {
         usagePercent: Math.round(getValue(cpuIdle) * 10) / 10,
         cores: getValue(cpuCores),

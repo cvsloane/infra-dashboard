@@ -19,8 +19,9 @@ export async function GET(request: Request) {
 
     // Transform to match expected format
     const sitesData = {
-      allHealthy: siteHealth.summary.down === 0,
+      allHealthy: siteHealth.summary.down === 0 && siteHealth.summary.sslExpiringSoon === 0,
       downCount: siteHealth.summary.down,
+      sslExpiringSoonCount: siteHealth.summary.sslExpiringSoon,
       sites: siteHealth.sites,
     };
 

@@ -12,6 +12,7 @@ import {
   Server,
   Users,
   Settings,
+  Bell,
   X,
   LogOut,
   User,
@@ -38,6 +39,7 @@ const navGroups = [
     items: [
       { name: 'Queues', href: '/queues', icon: ListTodo },
       { name: 'Workers', href: '/workers', icon: Users },
+      { name: 'Alerts', href: '/alerts', icon: Bell },
     ],
   },
 ];

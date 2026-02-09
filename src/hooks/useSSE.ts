@@ -14,6 +14,7 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
   const [data, setData] = useState<T | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const connectRef = useRef<() => void>(() => {});
@@ -51,6 +52,7 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
     };
 
     eventSource.onmessage = (event) => {
+      setLastMessageAt(Date.now());
       try {
         const parsed = JSON.parse(event.data);
         setData(parsed);
@@ -108,6 +110,7 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
     data,
     isConnected,
     error,
+    lastMessageAt,
     reconnect: connect,
     disconnect,
   };
@@ -122,6 +125,30 @@ export interface DashboardUpdate {
     prometheus: { ok: boolean; message: string };
     redis: { ok: boolean; message: string; latencyMs?: number };
   };
+  alerts?: {
+    status: 'ok' | 'warning' | 'error' | 'unknown';
+    message: string;
+    fetchedAt: string;
+    total: number;
+    firing: number;
+    suppressed: number;
+    bySeverity: Record<'critical' | 'warning' | 'info' | 'unknown', number>;
+    alerts: Array<{
+      fingerprint?: string;
+      name: string;
+      severity: 'critical' | 'warning' | 'info' | 'unknown';
+      state: 'firing' | 'suppressed' | 'unknown';
+      startsAt?: string;
+      endsAt?: string;
+      summary?: string;
+      description?: string;
+      generatorURL?: string;
+      labels: Record<string, string>;
+      annotations: Record<string, string>;
+      silencedBy: string[];
+      inhibitedBy: string[];
+    }>;
+  } | null;
   deployments?: {
     active: DeploymentRecordClient[];
     recent: DeploymentRecordClient[];
@@ -129,6 +156,7 @@ export interface DashboardUpdate {
   };
   postgres?: {
     up: boolean;
+    metricsAgeSeconds?: number | null;
     connections: { active: number; idle: number; max: number };
     databases: Array<{ name: string; size_bytes: number; connections: number }>;
   } | null;
@@ -166,6 +194,7 @@ export interface DashboardUpdate {
   vps?: {
     appsVps: {
       hostname: string;
+      metricsAgeSeconds?: number | null;
       cpu: { usagePercent: number; cores: number };
       memory: { totalBytes: number; availableBytes: number; usedPercent: number };
       disk: { totalBytes: number; availableBytes: number; usedPercent: number; mountPoint: string };
@@ -174,6 +203,7 @@ export interface DashboardUpdate {
     } | null;
     dbVps: {
       hostname: string;
+      metricsAgeSeconds?: number | null;
       cpu: { usagePercent: number; cores: number };
       memory: { totalBytes: number; availableBytes: number; usedPercent: number };
       disk: { totalBytes: number; availableBytes: number; usedPercent: number; mountPoint: string };
@@ -184,6 +214,7 @@ export interface DashboardUpdate {
   sites?: {
     allHealthy: boolean;
     downCount: number;
+    sslExpiringSoonCount?: number;
     sites: Array<{
       applicationUuid?: string;
       name: string;
@@ -192,6 +223,8 @@ export interface DashboardUpdate {
       httpStatus?: number;
       responseTimeMs?: number;
       sslValid?: boolean;
+      sslExpiresAt?: string;
+      sslDaysRemaining?: number;
       lastChecked: string;
       error?: string;
     }>;

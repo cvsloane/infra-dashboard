@@ -5,11 +5,19 @@
  */
 
 import { Pool } from 'pg';
+import tls from 'tls';
 
 const EXCLUDED_SITES = (process.env.SITE_HEALTH_EXCLUSIONS || '')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+
+const SSL_EXPIRY_WARN_DAYS = (() => {
+  const raw = process.env.SITE_HEALTH_SSL_EXPIRY_WARN_DAYS;
+  if (!raw) return 14;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 14;
+})();
 
 // Reuse Coolify DB connection
 const pool = new Pool({
@@ -40,6 +48,7 @@ export interface SiteHealthSummary {
     healthy: number;
     degraded: number;
     down: number;
+    sslExpiringSoon: number;
   };
 }
 
@@ -120,6 +129,8 @@ async function checkSite(name: string, fqdn: string, applicationUuid?: string): 
       url = `https://${url}`;
     }
 
+    const parsedUrl = new URL(url);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
@@ -143,17 +154,16 @@ async function checkSite(name: string, fqdn: string, applicationUuid?: string): 
     }
 
     // Check SSL (only for HTTPS)
-    if (url.startsWith('https://')) {
-      try {
-        // We can't directly check SSL from Node.js fetch, but we can infer
-        // If HTTPS worked without error, SSL is valid
-        result.sslValid = true;
+    if (parsedUrl.protocol === 'https:') {
+      // If HTTPS worked without error, SSL is valid from Node's perspective.
+      result.sslValid = true;
 
-        // For expiry, we'd need to use tls.connect or a library
-        // For now, mark as valid if HTTPS works
-      } catch {
-        result.sslValid = false;
-      }
+      const sslInfo = await getTlsCertificateInfo(parsedUrl.hostname, parsedUrl.port ? Number(parsedUrl.port) : 443);
+      if (sslInfo.expiresAt) result.sslExpiresAt = sslInfo.expiresAt.toISOString();
+      if (sslInfo.daysRemaining !== null) result.sslDaysRemaining = sslInfo.daysRemaining;
+
+      // Do not flip status to "down" for expiry warnings; show as metadata.
+      // This keeps "down" reserved for availability failures.
     }
   } catch (error) {
     result.status = 'down';
@@ -165,6 +175,57 @@ async function checkSite(name: string, fqdn: string, applicationUuid?: string): 
   }
 
   return result;
+}
+
+async function getTlsCertificateInfo(
+  hostname: string,
+  port: number
+): Promise<{ expiresAt: Date | null; daysRemaining: number | null }> {
+  const timeoutMs = 5000;
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = (payload: { expiresAt: Date | null; daysRemaining: number | null }) => {
+      if (settled) return;
+      settled = true;
+      resolve(payload);
+    };
+
+    const socket = tls.connect(
+      {
+        host: hostname,
+        port,
+        servername: hostname, // SNI
+        rejectUnauthorized: false, // allow introspection even if chain is invalid
+        timeout: timeoutMs,
+      },
+      () => {
+        try {
+          const cert = socket.getPeerCertificate();
+          const validTo = (cert as { valid_to?: string }).valid_to;
+          const expiresAt = validTo ? new Date(validTo) : null;
+          const expiresAtValid = expiresAt && Number.isFinite(expiresAt.getTime()) ? expiresAt : null;
+          const daysRemaining =
+            expiresAtValid ? Math.ceil((expiresAtValid.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+          finish({ expiresAt: expiresAtValid, daysRemaining });
+        } catch {
+          finish({ expiresAt: null, daysRemaining: null });
+        } finally {
+          socket.end();
+        }
+      }
+    );
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      finish({ expiresAt: null, daysRemaining: null });
+    });
+
+    socket.on('error', () => {
+      finish({ expiresAt: null, daysRemaining: null });
+    });
+  });
 }
 
 /**
@@ -188,6 +249,9 @@ export async function checkAllSites(): Promise<SiteHealthSummary> {
   const healthy = results.filter(s => s.status === 'healthy').length;
   const degraded = results.filter(s => s.status === 'degraded').length;
   const down = results.filter(s => s.status === 'down').length;
+  const sslExpiringSoon = results.filter((s) =>
+    typeof s.sslDaysRemaining === 'number' && s.sslDaysRemaining <= SSL_EXPIRY_WARN_DAYS
+  ).length;
 
   return {
     sites: results,
@@ -196,6 +260,7 @@ export async function checkAllSites(): Promise<SiteHealthSummary> {
       healthy,
       degraded,
       down,
+      sslExpiringSoon,
     },
   };
 }
@@ -206,6 +271,7 @@ export async function checkAllSites(): Promise<SiteHealthSummary> {
 export async function quickHealthCheck(): Promise<{
   allHealthy: boolean;
   downCount: number;
+  sslExpiringSoonCount: number;
   sites: SiteHealth[];
 }> {
   const apps = await getCoolifyApps();
@@ -218,10 +284,14 @@ export async function quickHealthCheck(): Promise<{
   );
 
   const downCount = results.filter(s => s.status === 'down').length;
+  const expiringSoonCount = results.filter((s) =>
+    typeof s.sslDaysRemaining === 'number' && s.sslDaysRemaining <= SSL_EXPIRY_WARN_DAYS
+  ).length;
 
   return {
-    allHealthy: downCount === 0,
+    allHealthy: downCount === 0 && expiringSoonCount === 0,
     downCount,
+    sslExpiringSoonCount: expiringSoonCount,
     sites: results,
   };
 }

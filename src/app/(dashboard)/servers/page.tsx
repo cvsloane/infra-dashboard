@@ -40,6 +40,8 @@ interface SiteHealth {
   httpStatus?: number;
   responseTimeMs?: number;
   sslValid?: boolean;
+  sslExpiresAt?: string;
+  sslDaysRemaining?: number;
   lastChecked: string;
   error?: string;
 }
@@ -52,6 +54,7 @@ interface ServersData {
   sites: {
     allHealthy: boolean;
     downCount: number;
+    sslExpiringSoonCount?: number;
     sites: SiteHealth[];
   };
 }

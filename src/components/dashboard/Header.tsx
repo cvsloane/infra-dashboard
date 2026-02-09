@@ -6,17 +6,30 @@ import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
 import { RefreshCw, WifiOff, Menu, ChevronRight, Home } from 'lucide-react';
 import Link from 'next/link';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 interface HeaderProps {
   isConnected?: boolean;
   lastUpdated?: string;
+  lastMessageAt?: number | null;
   onRefresh?: () => void;
   onMenuClick?: () => void;
 }
 
-export function Header({ isConnected, lastUpdated, onRefresh, onMenuClick }: HeaderProps) {
+export function Header({ isConnected, lastUpdated, lastMessageAt, onRefresh, onMenuClick }: HeaderProps) {
   const pathname = usePathname();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isConnected) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isConnected]);
+
+  const messageAgeSec = useMemo(() => {
+    if (!lastMessageAt) return null;
+    return Math.max(0, Math.floor((nowMs - lastMessageAt) / 1000));
+  }, [nowMs, lastMessageAt]);
   
   // Generate breadcrumbs
   const segments = pathname.split('/').filter(Boolean);
@@ -29,6 +42,12 @@ export function Header({ isConnected, lastUpdated, onRefresh, onMenuClick }: Hea
       
     return { label, href };
   });
+
+  const isStale = useMemo(() => {
+    if (!isConnected) return false;
+    if (messageAgeSec === null) return false;
+    return messageAgeSec > 45;
+  }, [isConnected, messageAgeSec]);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6">
@@ -86,15 +105,34 @@ export function Header({ isConnected, lastUpdated, onRefresh, onMenuClick }: Hea
         {isConnected !== undefined && (
           <Badge 
             variant="outline" 
-            className={`gap-1.5 hidden sm:flex ${isConnected ? 'bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20' : 'bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20'}`}
+            className={`gap-1.5 hidden sm:flex ${
+              !isConnected
+                ? 'bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20'
+                : isStale
+                ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/20'
+                : 'bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20'
+            }`}
           >
             {isConnected ? (
               <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </span>
-                <span className="font-medium">Live</span>
+                {isStale ? (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    <span className="font-medium">
+                      Stale{messageAgeSec !== null ? ` (${messageAgeSec}s)` : ''}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span className="font-medium">
+                      Live{messageAgeSec !== null ? ` (${messageAgeSec}s)` : ''}
+                    </span>
+                  </>
+                )}
               </>
             ) : (
               <>

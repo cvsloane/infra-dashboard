@@ -8,7 +8,7 @@ import { QueueCard } from '@/components/queues/QueueCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Server, Database, Activity, AlertTriangle, Globe, Archive } from 'lucide-react';
+import { Server, Database, Activity, AlertTriangle, Globe, Archive, Bell } from 'lucide-react';
 import { useDashboard } from './layout';
 import { AgentsCard } from '@/components/agents/AgentsCard';
 import type { CoolifyDeployment } from '@/types';
@@ -22,9 +22,18 @@ interface SiteHealth {
   httpStatus?: number;
   responseTimeMs?: number;
   error?: string;
+  sslDaysRemaining?: number;
 }
 
 interface OverviewData {
+  alerts: {
+    status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
+    message: string;
+    firing: number;
+    suppressed: number;
+    critical: number;
+    warning: number;
+  };
   coolify: {
     status: 'ok' | 'error' | 'warning' | 'loading';
     message: string;
@@ -38,6 +47,7 @@ interface OverviewData {
     message: string;
     connections: number;
     maxConnections: number;
+    metricsAgeSec: number | null;
   };
   backups: {
     status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
@@ -93,6 +103,7 @@ interface OverviewData {
     downSites: SiteHealth[];
     totalSites: number;
     healthySites: number;
+    sslExpiringSoonCount: number;
   };
 }
 
@@ -176,6 +187,7 @@ export default function OverviewPage() {
     const coolifyHealth = sseData.health?.coolify;
     const postgresHealth = sseData.postgres;
     const backupsData = sseData.backups;
+    const alertsData = sseData.alerts;
     const sitesData = sseData.sites;
     const workerSupervisor = sseData.workerSupervisor;
     const workerSummary = workerSupervisor?.summary || { total: 0, ok: 0, warning: 0, down: 0 };
@@ -195,6 +207,14 @@ export default function OverviewPage() {
       : 'No supervisor data';
 
     setData({
+      alerts: {
+        status: alertsData?.status ?? 'unknown',
+        message: alertsData?.message ?? 'No alert data',
+        firing: alertsData?.firing ?? 0,
+        suppressed: alertsData?.suppressed ?? 0,
+        critical: alertsData?.bySeverity?.critical ?? 0,
+        warning: alertsData?.bySeverity?.warning ?? 0,
+      },
       coolify: {
         status: coolifyHealth?.ok ? 'ok' : 'error',
         message: coolifyHealth?.ok
@@ -212,6 +232,7 @@ export default function OverviewPage() {
           : 'PostgreSQL is down',
         connections: postgresHealth?.connections.active || 0,
         maxConnections: postgresHealth?.connections.max || 100,
+        metricsAgeSec: postgresHealth?.metricsAgeSeconds ?? null,
       },
       backups: {
         status: backupsData?.status ?? 'unknown',
@@ -241,10 +262,11 @@ export default function OverviewPage() {
         workersDown,
       },
       sites: {
-        status: (sitesData?.downCount || 0) > 0 ? 'error' : 'ok',
+        status: (sitesData?.downCount || 0) > 0 ? 'error' : (sitesData?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
         downSites: (sitesData?.sites || []).filter((s: SiteHealth) => s.status === 'down'),
         totalSites: sitesData?.sites?.length || 0,
         healthySites: (sitesData?.sites || []).filter((s: SiteHealth) => s.status === 'healthy').length,
+        sslExpiringSoonCount: sitesData?.sslExpiringSoonCount || 0,
       },
     });
     setLoading(false);
@@ -254,10 +276,11 @@ export default function OverviewPage() {
     if (isConnected) return;
     const fetchData = async () => {
       try {
-        const [coolifyRes, postgresRes, backupsRes, bullmqRes, sitesRes, workerRes] = await Promise.all([
+        const [coolifyRes, postgresRes, backupsRes, alertsRes, bullmqRes, sitesRes, workerRes] = await Promise.all([
           fetch('/api/coolify/applications'),
           fetch('/api/postgres/health'),
           fetch('/api/postgres/backups'),
+          fetch('/api/alertmanager/alerts'),
           fetch('/api/bullmq/queues'),
           fetch('/api/servers/status'),
           fetch('/api/workers/status'),
@@ -267,8 +290,9 @@ export default function OverviewPage() {
         setApplicationCount(coolifyData.applications?.length || 0);
         const postgresData = await postgresRes.json();
         const backupsData = backupsRes.ok ? await backupsRes.json() : null;
+        const alertsData = alertsRes.ok ? await alertsRes.json() : null;
         const bullmqData = await bullmqRes.json();
-        const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0 } };
+        const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0, sslExpiringSoonCount: 0 } };
         const workerData = workerRes.ok ? await workerRes.json() : { status: null };
 
         // Fetch recent deployments (now includes active, recent, and stats)
@@ -315,6 +339,14 @@ export default function OverviewPage() {
           : 'No supervisor data';
 
         setData({
+          alerts: {
+            status: alertsData?.status ?? 'unknown',
+            message: alertsData?.message ?? 'No alert data',
+            firing: alertsData?.firing ?? 0,
+            suppressed: alertsData?.suppressed ?? 0,
+            critical: alertsData?.bySeverity?.critical ?? 0,
+            warning: alertsData?.bySeverity?.warning ?? 0,
+          },
           coolify: {
             status: coolifyRes.ok ? 'ok' : 'error',
             message: coolifyRes.ok
@@ -330,6 +362,7 @@ export default function OverviewPage() {
             message: postgresData.message || 'Unable to connect to PostgreSQL',
             connections: postgresData.metrics?.pg_stat_activity_count || 0,
             maxConnections: postgresData.metrics?.pg_settings_max_connections || 100,
+            metricsAgeSec: null,
           },
           backups: {
             status: backupsData?.status ?? 'unknown',
@@ -359,10 +392,11 @@ export default function OverviewPage() {
             workersDown,
           },
           sites: {
-            status: sitesData.sites?.downCount > 0 ? 'error' : 'ok',
+            status: sitesData.sites?.downCount > 0 ? 'error' : (sitesData.sites?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
             downSites: (sitesData.sites?.sites || []).filter((s: SiteHealth) => s.status === 'down'),
             totalSites: sitesData.sites?.sites?.length || 0,
             healthySites: (sitesData.sites?.sites || []).filter((s: SiteHealth) => s.status === 'healthy').length,
+            sslExpiringSoonCount: sitesData.sites?.sslExpiringSoonCount || 0,
           },
         });
       } catch (error) {
@@ -453,6 +487,18 @@ export default function OverviewPage() {
       {/* Status Cards */}
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatusCard
+          title="Alerts"
+          status={data?.alerts.status || 'loading'}
+          message={data?.alerts.message}
+          icon={Bell}
+          stats={[
+            { label: 'Firing', value: data?.alerts.firing ?? 0 },
+            { label: 'Crit', value: data?.alerts.critical ?? 0 },
+            { label: 'Warn', value: data?.alerts.warning ?? 0 },
+            { label: 'Supp', value: data?.alerts.suppressed ?? 0 },
+          ]}
+        />
+        <StatusCard
           title="Coolify"
           status={data?.coolify.status || 'loading'}
           message={data?.coolify.message}
@@ -466,11 +512,14 @@ export default function OverviewPage() {
           status={data?.sites.status || 'loading'}
           message={(data?.sites.downSites?.length ?? 0) > 0
             ? `${data?.sites.downSites?.length} site${(data?.sites.downSites?.length ?? 0) > 1 ? 's' : ''} down`
+            : (data?.sites.sslExpiringSoonCount ?? 0) > 0
+            ? `${data?.sites.sslExpiringSoonCount} SSL expiring soon`
             : `${data?.sites.healthySites ?? 0}/${data?.sites.totalSites ?? 0} healthy`}
           icon={Globe}
           stats={[
             { label: 'Healthy', value: data?.sites.healthySites ?? 0 },
             { label: 'Down', value: data?.sites.downSites?.length ?? 0 },
+            { label: 'SSL Soon', value: data?.sites.sslExpiringSoonCount ?? 0 },
           ]}
         />
         <StatusCard
@@ -483,6 +532,7 @@ export default function OverviewPage() {
               label: 'Connections',
               value: `${data?.postgres.connections || 0}/${data?.postgres.maxConnections || 0}`,
             },
+            { label: 'Metrics', value: formatDuration(data?.postgres.metricsAgeSec) },
           ]}
         />
         <StatusCard

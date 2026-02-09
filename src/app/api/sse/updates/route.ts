@@ -6,6 +6,7 @@ import { healthCheck as redisHealth, getAllQueueStats } from '@/lib/redis/client
 import { getWorkerSupervisorStatus } from '@/lib/redis/workers';
 import { quickHealthCheck } from '@/lib/health/sites';
 import { getPostgresBackupsSummary } from '@/lib/backups/postgres';
+import { getAlertmanagerSummary } from '@/lib/alertmanager/client';
 
 // Polling interval in milliseconds (15s to avoid Coolify rate limiting)
 const POLL_INTERVAL = 15000;
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
             coolifyStatus,
             prometheusStatus,
             redisStatus,
+            alerts,
             liveDeployments,
             postgres,
             pgbouncer,
@@ -78,13 +80,14 @@ export async function GET(request: Request) {
             withTimeout(coolifyHealth(), timeout, { ok: false, message: 'Timeout' }),
             withTimeout(prometheusHealth(), timeout, { ok: false, message: 'Timeout' }),
             withTimeout(redisHealth(), timeout, { ok: false, message: 'Timeout', latencyMs: 0 }),
+            withTimeout(getAlertmanagerSummary({ limit: 25 }), timeout, null),
             withTimeout(getLiveDeployments(), timeout, { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 } }),
             withTimeout(getPostgresHealth(), timeout, { up: false, connections: { active: 0, idle: 0, max: 100 }, databases: [] }),
             withTimeout(getPgBouncerHealth(), timeout, { up: false, pools: [], total_active: 0, total_waiting: 0 }),
             withTimeout(getPostgresBackupsSummary(), timeout, null),
             withTimeout(getAllQueueStats(), timeout, []),
             withTimeout(getAllVPSMetrics(), timeout, { appsVps: null, dbVps: null }),
-            withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sites: [] }),
+            withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sites: [] }),
             withTimeout(getWorkerSupervisorStatus(), timeout, null),
           ]);
 
@@ -98,7 +101,7 @@ export async function GET(request: Request) {
 
           const sitesData = siteHealth.status === 'fulfilled'
             ? siteHealth.value
-            : { allHealthy: true, downCount: 0, sites: [] };
+            : { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sites: [] };
 
           const workerSupervisorData = workerSupervisor.status === 'fulfilled'
             ? workerSupervisor.value
@@ -112,6 +115,7 @@ export async function GET(request: Request) {
               prometheus: prometheusStatus.status === 'fulfilled' ? prometheusStatus.value : { ok: false, message: 'Failed to check' },
               redis: redisStatus.status === 'fulfilled' ? redisStatus.value : { ok: false, message: 'Failed to check' },
             },
+            alerts: alerts.status === 'fulfilled' ? alerts.value : null,
             deployments: deploymentsData,
             postgres: postgres.status === 'fulfilled' ? postgres.value : null,
             pgbouncer: pgbouncer.status === 'fulfilled' ? pgbouncer.value : null,

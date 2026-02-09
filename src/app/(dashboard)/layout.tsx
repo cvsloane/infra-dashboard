@@ -9,6 +9,7 @@ interface DashboardContextType {
   data: DashboardUpdate | null;
   isConnected: boolean;
   lastUpdated?: string;
+  lastMessageAt?: number | null;
   refresh: () => void;
 }
 
@@ -28,7 +29,7 @@ export default function DashboardLayout({
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { data, isConnected } = useSSE<DashboardUpdate>(`/api/sse/updates?key=${refreshKey}`, {
+  const { data, isConnected, lastMessageAt } = useSSE<DashboardUpdate>(`/api/sse/updates?key=${refreshKey}`, {
     onError: (err) => console.error('SSE Error:', err),
   });
   const lastUpdated = data?.type === 'update' ? data.timestamp : undefined;
@@ -38,13 +39,14 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <DashboardContext.Provider value={{ data, isConnected, lastUpdated, refresh }}>
+    <DashboardContext.Provider value={{ data, isConnected, lastUpdated, lastMessageAt, refresh }}>
       <div className="flex h-screen bg-background">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header
             isConnected={isConnected}
             lastUpdated={lastUpdated}
+            lastMessageAt={lastMessageAt}
             onRefresh={refresh}
             onMenuClick={() => setSidebarOpen(true)}
           />

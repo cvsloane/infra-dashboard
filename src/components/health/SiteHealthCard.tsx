@@ -12,6 +12,8 @@ interface SiteHealth {
   httpStatus?: number;
   responseTimeMs?: number;
   sslValid?: boolean;
+  sslExpiresAt?: string;
+  sslDaysRemaining?: number;
   lastChecked: string;
   error?: string;
 }
@@ -19,6 +21,7 @@ interface SiteHealth {
 interface SiteHealthSummary {
   allHealthy: boolean;
   downCount: number;
+  sslExpiringSoonCount?: number;
   sites: SiteHealth[];
 }
 
@@ -54,6 +57,12 @@ const statusConfig = {
   },
 };
 
+const SSL_WARN_DAYS = 14;
+
+function isSslExpiringSoon(site: SiteHealth): boolean {
+  return typeof site.sslDaysRemaining === 'number' && site.sslDaysRemaining <= SSL_WARN_DAYS;
+}
+
 export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
   if (!data || data.sites.length === 0) {
     return (
@@ -73,10 +82,18 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
 
   const healthyCount = data.sites.filter(s => s.status === 'healthy').length;
   const totalCount = data.sites.length;
+  const expiringCount =
+    typeof data.sslExpiringSoonCount === 'number'
+      ? data.sslExpiringSoonCount
+      : data.sites.filter(isSslExpiringSoon).length;
+
+  const hasDown = (data.downCount || 0) > 0;
+  const hasExpiring = expiringCount > 0;
+  const allHealthy = !hasDown && !hasExpiring;
 
   if (compact) {
     return (
-      <Card className={data.allHealthy ? 'border-green-500/30' : 'border-red-500/30'}>
+      <Card className={allHealthy ? 'border-green-500/30' : hasDown ? 'border-red-500/30' : 'border-yellow-500/30'}>
         <CardContent className="pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -84,29 +101,43 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
               <span className="font-medium">Sites</span>
             </div>
             <div className="flex items-center gap-2">
-              {data.allHealthy ? (
+              {allHealthy ? (
                 <Badge variant="default" className="gap-1">
                   <CheckCircle className="h-3 w-3" />
                   {healthyCount}/{totalCount} Healthy
                 </Badge>
-              ) : (
+              ) : hasDown ? (
                 <Badge variant="destructive" className="gap-1">
                   <XCircle className="h-3 w-3" />
                   {data.downCount} Down
                 </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {expiringCount} SSL Expiring
+                </Badge>
               )}
             </div>
           </div>
-          {!data.allHealthy && (
+          {!allHealthy && (
             <div className="mt-3 space-y-1">
-              {data.sites
-                .filter(s => s.status === 'down')
-                .slice(0, 3)
-                .map(site => (
-                  <div key={site.fqdn} className="text-sm text-red-500 truncate">
-                    {site.name}: {site.error || 'Unreachable'}
-                  </div>
-                ))}
+              {hasDown
+                ? data.sites
+                    .filter(s => s.status === 'down')
+                    .slice(0, 3)
+                    .map(site => (
+                      <div key={site.fqdn} className="text-sm text-red-500 truncate">
+                        {site.name}: {site.error || 'Unreachable'}
+                      </div>
+                    ))
+                : data.sites
+                    .filter(isSslExpiringSoon)
+                    .slice(0, 3)
+                    .map(site => (
+                      <div key={site.fqdn} className="text-sm text-yellow-600 truncate">
+                        {site.name}: SSL {site.sslDaysRemaining ?? '—'}d
+                      </div>
+                    ))}
             </div>
           )}
         </CardContent>
@@ -122,9 +153,14 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
             <Globe className="h-4 w-4" />
             Site Health
           </CardTitle>
-          <Badge variant={data.allHealthy ? 'default' : 'destructive'}>
-            {healthyCount}/{totalCount} Healthy
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={allHealthy ? 'default' : hasDown ? 'destructive' : 'secondary'}>
+              {healthyCount}/{totalCount} Healthy
+            </Badge>
+            {hasExpiring && (
+              <Badge variant="secondary">{expiringCount} SSL Expiring</Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -132,6 +168,14 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
           {data.sites.map(site => {
             const config = statusConfig[site.status];
             const StatusIcon = config.icon;
+
+            const sslDays = typeof site.sslDaysRemaining === 'number' ? site.sslDaysRemaining : null;
+            const sslVariant =
+              site.sslValid === false || (sslDays !== null && sslDays < 0)
+                ? 'destructive'
+                : sslDays !== null && sslDays <= SSL_WARN_DAYS
+                ? 'secondary'
+                : 'outline';
 
             return (
               <div
@@ -152,6 +196,11 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
                     <span className="text-xs text-muted-foreground">
                       {site.responseTimeMs}ms
                     </span>
+                  )}
+                  {sslDays !== null && (
+                    <Badge variant={sslVariant as 'default' | 'secondary' | 'destructive' | 'outline'} className="text-xs">
+                      {sslDays < 0 ? 'SSL expired' : `SSL ${sslDays}d`}
+                    </Badge>
                   )}
                   {site.httpStatus && (
                     <Badge variant={config.badge} className="text-xs">
