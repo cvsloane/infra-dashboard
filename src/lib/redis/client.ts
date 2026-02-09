@@ -5,10 +5,15 @@
  * Provides queue depths, failed job details, and job management.
  */
 
-import Redis from 'ioredis';
+import { Queue } from 'bullmq';
+import Redis, { type RedisOptions } from 'ioredis';
 
 // Singleton Redis connection
 let redis: Redis | null = null;
+
+// BullMQ mutation helpers (avoid manual key manipulation).
+let bullConnection: Redis | RedisOptions | null = null;
+const bullQueueCache = new Map<string, Queue>();
 
 // Types
 export interface QueueStats {
@@ -56,6 +61,45 @@ export interface JobDetails {
   failedReason?: string;
   processedOn?: number;
   finishedOn?: number;
+}
+
+function getBullmqConnection(): Redis | RedisOptions {
+  if (bullConnection) {
+    return bullConnection;
+  }
+
+  const redisUrl = process.env.REDIS_URL;
+  const host = process.env.REDIS_HOST || '127.0.0.1';
+  const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+  const password = process.env.REDIS_PASSWORD;
+  const username = process.env.REDIS_USERNAME;
+
+  bullConnection = redisUrl
+    ? new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      })
+    : {
+        host,
+        port,
+        username,
+        password,
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      };
+
+  return bullConnection;
+}
+
+function getBullmqQueue(queueName: string): Queue {
+  const existing = bullQueueCache.get(queueName);
+  if (existing) return existing;
+
+  const queue = new Queue(queueName, {
+    connection: getBullmqConnection(),
+  });
+  bullQueueCache.set(queueName, queue);
+  return queue;
 }
 
 // Get or create Redis connection
@@ -413,82 +457,84 @@ export async function getJobDetails(queueName: string, jobId: string): Promise<J
 
 // Retry a failed job
 export async function retryJob(queueName: string, jobId: string): Promise<boolean> {
-  const client = getRedis();
-  const prefix = `bull:${queueName}`;
+  const queue = getBullmqQueue(queueName);
+  const job = await queue.getJob(jobId);
+  if (!job) return false;
 
-  // Move from failed to wait
-  const removed = await client.zrem(`${prefix}:failed`, jobId);
-  if (removed) {
-    await client.lpush(`${prefix}:wait`, jobId);
-    // Reset attempts
-    await client.hset(`${prefix}:${jobId}`, 'attemptsMade', '0');
-    await client.hdel(`${prefix}:${jobId}`, 'failedReason', 'stacktrace', 'finishedOn');
+  const opts = { resetAttemptsMade: true, resetAttemptsStarted: true };
+  try {
+    await job.retry('failed', opts);
     return true;
+  } catch (error) {
+    // If the job is in a different terminal state (e.g. completed), allow retry anyway.
+    try {
+      await job.retry('completed', opts);
+      return true;
+    } catch (retryError) {
+      console.error(`Failed to retry job ${queueName}/${jobId}:`, retryError);
+      return false;
+    }
   }
-  return false;
 }
 
 // Delete a job
 export async function deleteJob(queueName: string, jobId: string): Promise<boolean> {
-  const client = getRedis();
-  const prefix = `bull:${queueName}`;
-
-  // Remove from all possible sets/lists
-  await Promise.all([
-    client.lrem(`${prefix}:wait`, 0, jobId),
-    client.lrem(`${prefix}:active`, 0, jobId),
-    client.lrem(`${prefix}:paused`, 0, jobId),
-    client.zrem(`${prefix}:completed`, jobId),
-    client.zrem(`${prefix}:failed`, jobId),
-    client.zrem(`${prefix}:delayed`, jobId),
-  ]);
-
-  // Delete job hash
-  const deleted = await client.del(`${prefix}:${jobId}`);
-  return deleted > 0;
+  const queue = getBullmqQueue(queueName);
+  try {
+    const code = await queue.remove(jobId, { removeChildren: true });
+    return code === 1;
+  } catch (error) {
+    console.error(`Failed to delete job ${queueName}/${jobId}:`, error);
+    return false;
+  }
 }
 
 // Retry all failed jobs in a queue
 export async function retryAllFailed(queueName: string, limit?: number): Promise<number> {
-  const client = getRedis();
-  const prefix = `bull:${queueName}`;
-
+  const queue = getBullmqQueue(queueName);
   const end = limit && limit > 0 ? limit - 1 : -1;
-  const jobIds = await client.zrevrange(`${prefix}:failed`, 0, end);
-  if (jobIds.length === 0) return 0;
 
-  const pipeline = client.pipeline();
-  for (const jobId of jobIds) {
-    pipeline.zrem(`${prefix}:failed`, jobId);
-    pipeline.lpush(`${prefix}:wait`, jobId);
-    pipeline.hset(`${prefix}:${jobId}`, 'attemptsMade', '0');
-    pipeline.hdel(`${prefix}:${jobId}`, 'failedReason', 'stacktrace', 'finishedOn');
+  const jobs = await queue.getJobs(['failed'], 0, end, true);
+  if (!jobs.length) return 0;
+
+  const opts = { resetAttemptsMade: true, resetAttemptsStarted: true };
+  let processed = 0;
+  for (const job of jobs) {
+    if (!job) continue;
+    try {
+      await job.retry('failed', opts);
+      processed += 1;
+    } catch (error) {
+      // Skip locked/missing jobs.
+      console.error(`Failed to retry job ${queueName}/${job.id}:`, error);
+    }
   }
-  await pipeline.exec();
-  return jobIds.length;
+
+  return processed;
 }
 
 // Delete all failed jobs in a queue
 export async function deleteAllFailed(queueName: string, limit?: number): Promise<number> {
-  const client = getRedis();
-  const prefix = `bull:${queueName}`;
-
+  const queue = getBullmqQueue(queueName);
   const end = limit && limit > 0 ? limit - 1 : -1;
-  const jobIds = await client.zrevrange(`${prefix}:failed`, 0, end);
-  if (jobIds.length === 0) return 0;
 
-  const pipeline = client.pipeline();
-  for (const jobId of jobIds) {
-    pipeline.lrem(`${prefix}:wait`, 0, jobId);
-    pipeline.lrem(`${prefix}:active`, 0, jobId);
-    pipeline.lrem(`${prefix}:paused`, 0, jobId);
-    pipeline.zrem(`${prefix}:completed`, jobId);
-    pipeline.zrem(`${prefix}:failed`, jobId);
-    pipeline.zrem(`${prefix}:delayed`, jobId);
-    pipeline.del(`${prefix}:${jobId}`);
+  const jobs = await queue.getJobs(['failed'], 0, end, true);
+  if (!jobs.length) return 0;
+
+  let processed = 0;
+  for (const job of jobs) {
+    if (!job) continue;
+    try {
+      const code = await queue.remove(job.id, { removeChildren: true });
+      if (code === 1) {
+        processed += 1;
+      }
+    } catch (error) {
+      console.error(`Failed to delete job ${queueName}/${job.id}:`, error);
+    }
   }
-  await pipeline.exec();
-  return jobIds.length;
+
+  return processed;
 }
 
 // Health check - tests connectivity to Redis

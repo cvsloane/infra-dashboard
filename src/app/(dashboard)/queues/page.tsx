@@ -73,6 +73,7 @@ export default function QueuesPage() {
   const [bulkAction, setBulkAction] = useState<'retry_all' | 'delete_all' | null>(null);
   const [queueFilter, setQueueFilter] = useState('');
   const [queueAction, setQueueAction] = useState<{ name: string; action: 'pause' | 'resume' } | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
   const formatDuration = (seconds?: number) => {
     if (seconds === undefined) return '—';
@@ -150,7 +151,7 @@ export default function QueuesPage() {
       const job = failedJobs.find((j) => j.id === jobId);
       if (!job) return;
 
-      await fetch('/api/bullmq/jobs/failed', {
+      const res = await fetch('/api/bullmq/jobs/failed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,6 +160,15 @@ export default function QueuesPage() {
           jobId,
         }),
       });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.success === false) {
+        setNotice({
+          kind: 'error',
+          message: json?.error || 'Retry failed.',
+        });
+      } else {
+        setNotice({ kind: 'success', message: `Retried job ${jobId}` });
+      }
 
       // Refresh data
       fetchFailedJobs();
@@ -175,7 +185,7 @@ export default function QueuesPage() {
       const job = failedJobs.find((j) => j.id === jobId);
       if (!job) return;
 
-      await fetch('/api/bullmq/jobs/failed', {
+      const res = await fetch('/api/bullmq/jobs/failed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -184,6 +194,15 @@ export default function QueuesPage() {
           jobId,
         }),
       });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.success === false) {
+        setNotice({
+          kind: 'error',
+          message: json?.error || 'Delete failed.',
+        });
+      } else {
+        setNotice({ kind: 'success', message: `Deleted job ${jobId}` });
+      }
 
       // Refresh data
       fetchFailedJobs();
@@ -203,7 +222,7 @@ export default function QueuesPage() {
 
     setBulkAction(action);
     try {
-      await fetch('/api/bullmq/jobs/failed', {
+      const res = await fetch('/api/bullmq/jobs/failed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -212,12 +231,22 @@ export default function QueuesPage() {
           limit: bulkLimit,
         }),
       });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setNotice({ kind: 'error', message: json?.error || 'Bulk action failed.' });
+      } else {
+        setNotice({
+          kind: 'success',
+          message: `Processed ${json?.processed ?? 0} job${(json?.processed ?? 0) === 1 ? '' : 's'} (${action.replace('_', ' ')})`,
+        });
+      }
       fetchFailedJobs();
       if (!isConnected) {
         fetchQueues();
       }
     } catch (error) {
       console.error('Failed to run bulk action:', error);
+      setNotice({ kind: 'error', message: 'Bulk action failed.' });
     } finally {
       setBulkAction(null);
     }
@@ -226,6 +255,7 @@ export default function QueuesPage() {
   const handleRefresh = () => {
     fetchQueues();
     fetchFailedJobs();
+    setNotice(null);
   };
 
   const handlePauseQueue = async (queueName: string) => {
@@ -313,6 +343,14 @@ export default function QueuesPage() {
           </Button>
         </div>
       </div>
+
+      {notice && (
+        <Card className={notice.kind === 'error' ? 'border-red-500/50 bg-red-500/10' : 'border-green-500/50 bg-green-500/10'}>
+          <CardContent className="pt-4 text-sm">
+            {notice.message}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Worker Down Alert */}
       {queuesWithoutWorkers.length > 0 && (

@@ -69,7 +69,11 @@ export async function POST(request: Request) {
         );
       }
       const success = await retryJob(queue, jobId);
-      return NextResponse.json({ success, action: 'retry' });
+      return NextResponse.json({
+        success,
+        action: 'retry',
+        error: success ? undefined : 'Job could not be retried (missing, locked, or not in a terminal state).',
+      });
     }
 
     if (action === 'delete') {
@@ -80,7 +84,11 @@ export async function POST(request: Request) {
         );
       }
       const success = await deleteJob(queue, jobId);
-      return NextResponse.json({ success, action: 'delete' });
+      return NextResponse.json({
+        success,
+        action: 'delete',
+        error: success ? undefined : 'Job could not be deleted (missing or locked by a worker).',
+      });
     }
 
     if (action === 'retry_all' || action === 'delete_all') {
