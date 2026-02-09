@@ -43,6 +43,7 @@ export interface SiteHealth {
 
 export interface SiteHealthSummary {
   sites: SiteHealth[];
+  sslExpiryWarnDays: number;
   summary: {
     total: number;
     healthy: number;
@@ -255,6 +256,7 @@ export async function checkAllSites(): Promise<SiteHealthSummary> {
 
   return {
     sites: results,
+    sslExpiryWarnDays: SSL_EXPIRY_WARN_DAYS,
     summary: {
       total: results.length,
       healthy,
@@ -272,6 +274,7 @@ export async function quickHealthCheck(): Promise<{
   allHealthy: boolean;
   downCount: number;
   sslExpiringSoonCount: number;
+  sslExpiryWarnDays: number;
   sites: SiteHealth[];
 }> {
   const apps = await getCoolifyApps();
@@ -292,6 +295,7 @@ export async function quickHealthCheck(): Promise<{
     allHealthy: downCount === 0 && expiringSoonCount === 0,
     downCount,
     sslExpiringSoonCount: expiringSoonCount,
+    sslExpiryWarnDays: SSL_EXPIRY_WARN_DAYS,
     sites: results,
   };
 }

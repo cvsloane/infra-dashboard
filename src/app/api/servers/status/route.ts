@@ -22,6 +22,7 @@ export async function GET(request: Request) {
       allHealthy: siteHealth.summary.down === 0 && siteHealth.summary.sslExpiringSoon === 0,
       downCount: siteHealth.summary.down,
       sslExpiringSoonCount: siteHealth.summary.sslExpiringSoon,
+      sslExpiryWarnDays: siteHealth.sslExpiryWarnDays,
       sites: siteHealth.sites,
     };
 

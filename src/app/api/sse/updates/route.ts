@@ -87,7 +87,7 @@ export async function GET(request: Request) {
             withTimeout(getPostgresBackupsSummary(), timeout, null),
             withTimeout(getAllQueueStats(), timeout, []),
             withTimeout(getAllVPSMetrics(), timeout, { appsVps: null, dbVps: null }),
-            withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sites: [] }),
+            withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [] }),
             withTimeout(getWorkerSupervisorStatus(), timeout, null),
           ]);
 
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
 
           const sitesData = siteHealth.status === 'fulfilled'
             ? siteHealth.value
-            : { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sites: [] };
+            : { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [] };
 
           const workerSupervisorData = workerSupervisor.status === 'fulfilled'
             ? workerSupervisor.value
