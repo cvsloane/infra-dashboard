@@ -10,6 +10,14 @@
 
 A real-time monitoring dashboard that brings together everything you run: Coolify deployments, BullMQ queues, PostgreSQL metrics, and VPS health—all in one unified view. Built with Next.js 16, React 19, and TypeScript for a fast, modern experience.
 
+## Why Infra Dashboard?
+
+If you self-host applications with Coolify, you've probably felt the pain of context switching: checking deployment status in one tab, queue health in another, server metrics somewhere else. This dashboard solves that by bringing everything together.
+
+**Before:** Five different tools, constant tab switching, mental overhead remembering where to look.
+
+**After:** One dashboard, real-time updates, immediate action when things break.
+
 ## Screenshots
 
 <p align="center">
@@ -39,6 +47,8 @@ npm install
 npm run dev                 # http://localhost:3000
 ```
 
+**Prerequisites:** Node.js 18+, npm 9+, and a Coolify instance to connect to.
+
 ## Features
 
 | Feature | What It Does | Why It Helps |
@@ -47,6 +57,7 @@ npm run dev                 # http://localhost:3000
 | **🚀 Coolify Integration** | App status, deployment control, real-time build logs | Manage deployments without leaving the dashboard |
 | **📬 Queue Management** | BullMQ stats, worker health, bulk job actions | Fix failed jobs and monitor queue performance |
 | **🐘 PostgreSQL Monitoring** | Connection pools, PgBouncer stats, per-database metrics | Spot database bottlenecks before they impact users |
+| **🗄️ Database Backups** | Logical dump freshness, WAL archiving freshness, WAL-G base backup age, restore drill recency | Verify backups are current and restore procedures are exercised |
 | **🖥️ Server Metrics** | CPU, memory, disk, load averages | Understand resource usage across your infrastructure |
 | **🔍 Site Health** | HTTP status and SSL certificate checks | Know immediately when sites go down or certificates expire |
 | **⚙️ Worker Supervisor** | Systemd/PM2/Coolify worker health monitoring | Ensure background jobs are always running |
@@ -139,6 +150,7 @@ Each guide is designed to be self-contained—start where you need help:
 |----------|--------|-------------|
 | `/api/health` | GET | Basic health check (public, no auth required) |
 | `/api/postgres/health` | GET | PostgreSQL + PgBouncer metrics |
+| `/api/postgres/backups` | GET | PostgreSQL backup freshness (logical/WAL/base/drill) |
 | `/api/servers/status` | GET | VPS metrics and site health |
 | `/api/workers/status` | GET | Worker supervisor status (systemd/PM2/Coolify) |
 | `/api/sse/updates` | GET | Server-Sent Events stream for real-time updates |
