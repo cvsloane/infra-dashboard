@@ -6,6 +6,7 @@ Complete documentation for all environment variables in infra-dashboard. Use thi
 
 - [Coolify Integration](#coolify-integration) — API and database connections
 - [Prometheus Metrics](#prometheus-metrics) — Metrics collection endpoints
+- [Alerting](#alerting) — Alertmanager firing alerts
 - [Redis / BullMQ](#redis--bullmq) — Queue monitoring and configuration storage
 - [Uptime Kuma](#uptime-kuma) — External uptime monitoring
 - [Site Health](#site-health) — Health check exclusions
@@ -152,6 +153,25 @@ Use when your database runs on a separate server from your applications. This di
 
 ---
 
+## Alerting
+
+### `ALERTMANAGER_URL`
+
+**Optional** — Your Alertmanager server URL.
+
+```bash
+ALERTMANAGER_URL=http://192.168.1.100:9093
+```
+
+Enables the **Alerts** card on the Overview page and the `/alerts` page showing firing alerts from Alertmanager.
+
+**Quick verification:**
+```bash
+curl "http://your-alertmanager:9093/api/v2/alerts"
+```
+
+---
+
 ## Redis / BullMQ
 
 Redis powers BullMQ queue monitoring and stores AutoHEAL configuration.
@@ -256,6 +276,22 @@ Comma-separated list of application names or domains. Useful for:
 - Internal tools that don't need external monitoring
 - Staging environments
 - Worker-only applications with no HTTP interface
+
+---
+
+### `SITE_HEALTH_SSL_EXPIRY_WARN_DAYS`
+
+**Optional** — Threshold (in days) to flag certificates as "expiring soon".
+
+```bash
+SITE_HEALTH_SSL_EXPIRY_WARN_DAYS=14
+```
+
+Default: `14`
+
+If a monitored HTTPS site's TLS certificate expires within this window, infra-dashboard will:
+- show an **SSL expiring soon** warning in the Site Health UI
+- mark overall Site Health as not healthy (without marking the site as "down")
 
 ---
 
