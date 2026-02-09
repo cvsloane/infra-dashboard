@@ -67,6 +67,7 @@ function AgentRow({ agent }: { agent: AgentSummary }) {
   const lastRun = agent.lastRun;
   const config = lastRun ? statusConfig[lastRun.status] : null;
   const StatusIcon = config?.icon || Clock;
+  const actions = lastRun?.actions || [];
 
   return (
     <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
@@ -80,6 +81,25 @@ function AgentRow({ agent }: { agent: AgentSummary }) {
         <div>
           <p className="text-sm font-medium">{agent.displayName}</p>
           <p className="text-xs text-muted-foreground">{agent.description}</p>
+          {lastRun?.summary ? (
+            <p className="text-xs text-muted-foreground truncate max-w-[42ch]">
+              {lastRun.summary}
+            </p>
+          ) : null}
+          {actions.length > 0 ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {actions.slice(0, 3).map((action) => (
+                <Badge key={action} variant="outline" className="text-[10px] px-1 py-0">
+                  {action}
+                </Badge>
+              ))}
+              {actions.length > 3 ? (
+                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                  +{actions.length - 3}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="text-right">
