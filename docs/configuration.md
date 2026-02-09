@@ -236,6 +236,36 @@ Use when your Redis server uses ACLs (Access Control Lists) for fine-grained per
 
 ---
 
+### AutoHEAL Observability Keys
+
+These settings control where infra-dashboard reads AutoHEAL worker status and recent actions from Redis.
+
+### `AUTOHEAL_STATUS_KEY`
+
+**Optional** — Redis key containing the AutoHEAL worker heartbeat/status JSON.
+
+Default: `infra:autoheal:status`
+
+### `AUTOHEAL_EVENTS_KEY`
+
+**Optional** — Redis list key containing recent AutoHEAL actions.
+
+Default: `infra:autoheal:events`
+
+### `AUTOHEAL_STATUS_MAX_AGE_SEC`
+
+**Optional** — How old the heartbeat can be before infra-dashboard marks it as stale.
+
+Default: `180`
+
+### `AUTOHEAL_EVENTS_LIMIT`
+
+**Optional** — Max number of events to display in the dashboard.
+
+Default: `50` (max `200`)
+
+---
+
 ## Uptime Kuma
 
 ### `UPTIME_KUMA_URL`
