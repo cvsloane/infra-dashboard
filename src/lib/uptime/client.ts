@@ -5,6 +5,10 @@
  * Falls back to direct health checks if Uptime Kuma is not configured.
  */
 
+import 'server-only';
+
+import { recordUptimeKumaMetricsFetch } from '@/lib/server/metrics';
+
 const UPTIME_KUMA_URL = process.env.UPTIME_KUMA_URL;
 const UPTIME_KUMA_STATUS_PAGE = process.env.UPTIME_KUMA_STATUS_PAGE;
 
@@ -45,11 +49,21 @@ export async function getUptimeStatus(): Promise<UptimeStatus> {
 
   try {
     // Try the metrics endpoint first (if enabled)
-    const metricsRes = await fetch(`${baseUrl}/metrics`, {
-      cache: 'no-store',
-    });
+    const startedAt = Date.now();
+    let metricsResult: 'ok' | 'non_ok' | 'error' = 'error';
+    let metricsRes: Response | null = null;
+    try {
+      metricsRes = await fetch(`${baseUrl}/metrics`, {
+        cache: 'no-store',
+      });
+      metricsResult = metricsRes.ok ? 'ok' : 'non_ok';
+    } catch {
+      metricsResult = 'error';
+    } finally {
+      recordUptimeKumaMetricsFetch(metricsResult, (Date.now() - startedAt) / 1000);
+    }
 
-    if (metricsRes.ok) {
+    if (metricsRes?.ok) {
       const text = await metricsRes.text();
       return parsePrometheusMetrics(text);
     }
