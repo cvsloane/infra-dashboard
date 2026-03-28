@@ -24,8 +24,9 @@ describe('StatusCard', () => {
   })
 
   it('displays loading badge for loading status', () => {
-    render(<StatusCard title="Service" status="loading" />)
+    const { container } = render(<StatusCard title="Service" status="loading" />)
     expect(screen.getByText('Loading')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="skeleton"]')).toBeInTheDocument()
   })
 
   it('renders message when provided', () => {

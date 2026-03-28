@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { CheckCircle, XCircle, AlertCircle, Loader2, LucideIcon } from 'lucide-react';
 
@@ -63,6 +64,33 @@ export function StatusCard({
   const config = statusConfig[status];
   const StatusIcon = CustomIcon || config.icon;
 
+  if (status === 'loading') {
+    return (
+      <Card className={cn('border-l-4', config.borderColor, className)} aria-busy="true">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Badge variant={config.badgeVariant}>{config.label}</Badge>
+        </CardHeader>
+
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              {stats && stats.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {stats.map((stat) => (
+                    <Skeleton key={stat.label} className="h-4 w-full" />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className={cn('border-l-4', config.borderColor, className)}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -75,8 +103,7 @@ export function StatusCard({
           <StatusIcon
             className={cn(
               'h-8 w-8',
-              config.color,
-              status === 'loading' && 'animate-spin'
+              config.color
             )}
           />
           <div className="flex-1 min-w-0">

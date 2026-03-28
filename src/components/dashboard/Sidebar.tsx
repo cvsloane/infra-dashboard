@@ -2,49 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
-  Rocket,
-  Database,
-  Archive,
-  ListTodo,
-  Server,
-  Users,
   Settings,
-  Bell,
   X,
   LogOut,
   User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { navGroups } from '@/components/dashboard/navigation';
 
-const navGroups = [
-  {
-    label: 'Overview',
-    items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Infrastructure',
-    items: [
-      { name: 'Servers', href: '/servers', icon: Server },
-      { name: 'Deployments', href: '/coolify', icon: Rocket },
-      { name: 'Database', href: '/postgres', icon: Database },
-      { name: 'Backups', href: '/backups', icon: Archive },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { name: 'Queues', href: '/queues', icon: ListTodo },
-      { name: 'Workers', href: '/workers', icon: Users },
-      { name: 'Alerts', href: '/alerts', icon: Bell },
-    ],
-  },
-];
+const SIDEBAR_ANIMATION_MS = 200;
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -89,7 +58,12 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
         </Link>
         {/* Close button - mobile only */}
         {onClose && (
-          <button onClick={onClose} className="md:hidden p-1 hover:bg-muted rounded">
+          <button
+            type="button"
+            onClick={onClose}
+            className="md:hidden p-1 hover:bg-muted rounded"
+            aria-label="Close sidebar"
+          >
             <X className="h-5 w-5" />
           </button>
         )}
@@ -158,6 +132,92 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const [shouldRenderMobile, setShouldRenderMobile] = useState(Boolean(isOpen));
+  const [isClosing, setIsClosing] = useState(false);
+  const syncTimerRef = useRef<number | null>(null);
+  const closeStartTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const isMobileMounted = Boolean(isOpen) || shouldRenderMobile;
+
+  useEffect(() => {
+    if (syncTimerRef.current !== null) {
+      window.clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+
+    if (isOpen) {
+      if (closeStartTimerRef.current !== null) {
+        window.clearTimeout(closeStartTimerRef.current);
+        closeStartTimerRef.current = null;
+      }
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      syncTimerRef.current = window.setTimeout(() => {
+        setShouldRenderMobile(true);
+        setIsClosing(false);
+        syncTimerRef.current = null;
+      }, 0);
+      return;
+    }
+
+    if (!shouldRenderMobile) {
+      return;
+    }
+
+    closeStartTimerRef.current = window.setTimeout(() => {
+      setIsClosing(true);
+      closeStartTimerRef.current = null;
+    }, 0);
+    closeTimerRef.current = window.setTimeout(() => {
+      setShouldRenderMobile(false);
+      setIsClosing(false);
+      closeTimerRef.current = null;
+    }, SIDEBAR_ANIMATION_MS);
+  }, [isOpen, shouldRenderMobile]);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current !== null) {
+        window.clearTimeout(syncTimerRef.current);
+      }
+      if (closeStartTimerRef.current !== null) {
+        window.clearTimeout(closeStartTimerRef.current);
+      }
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileMounted) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMounted]);
+
+  useEffect(() => {
+    if (!isMobileMounted || !onClose) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileMounted, onClose]);
 
   return (
     <>
@@ -167,16 +227,25 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Mobile sidebar - drawer with backdrop */}
-      {isOpen && (
+      {isMobileMounted && (
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
+            className={cn(
+              'fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden',
+              isClosing ? 'sidebar-backdrop-exit' : 'sidebar-backdrop-enter'
+            )}
             onClick={onClose}
+            data-sidebar-backdrop="true"
             aria-hidden="true"
           />
           {/* Drawer */}
-          <div className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-background shadow-lg md:hidden">
+          <div
+            className={cn(
+              'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r bg-background shadow-2xl overscroll-contain md:hidden',
+              isClosing ? 'sidebar-drawer-exit' : 'sidebar-drawer-enter'
+            )}
+          >
             <SidebarContent pathname={pathname} onClose={onClose} />
           </div>
         </>

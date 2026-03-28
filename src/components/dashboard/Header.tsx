@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
-import { RefreshCw, WifiOff, Menu, ChevronRight, Home } from 'lucide-react';
+import { RefreshCw, WifiOff, Menu, ChevronRight, Home, Keyboard } from 'lucide-react';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 
@@ -14,9 +14,17 @@ interface HeaderProps {
   lastMessageAt?: number | null;
   onRefresh?: () => void;
   onMenuClick?: () => void;
+  onShortcutsClick?: () => void;
 }
 
-export function Header({ isConnected, lastUpdated, lastMessageAt, onRefresh, onMenuClick }: HeaderProps) {
+export function Header({
+  isConnected,
+  lastUpdated,
+  lastMessageAt,
+  onRefresh,
+  onMenuClick,
+  onShortcutsClick,
+}: HeaderProps) {
   const pathname = usePathname();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -59,6 +67,7 @@ export function Header({ isConnected, lastUpdated, lastMessageAt, onRefresh, onM
             size="icon"
             onClick={onMenuClick}
             className="md:hidden shrink-0"
+            aria-label="Open sidebar"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -155,6 +164,16 @@ export function Header({ isConnected, lastUpdated, lastMessageAt, onRefresh, onM
           <Button variant="ghost" size="icon" onClick={onRefresh} className="hover:bg-muted">
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh</span>
+          </Button>
+        )}
+
+        {onShortcutsClick && (
+          <Button variant="outline" size="sm" onClick={onShortcutsClick} className="gap-2">
+            <Keyboard className="h-4 w-4" />
+            <span className="hidden sm:inline">Shortcuts</span>
+            <kbd className="hidden rounded border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground md:inline-flex">
+              ?
+            </kbd>
           </Button>
         )}
 

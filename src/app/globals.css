@@ -123,3 +123,64 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes sidebar-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sidebar-backdrop-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sidebar-drawer-enter {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sidebar-drawer-exit {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.sidebar-backdrop-enter {
+  animation: sidebar-backdrop-enter 200ms ease-out forwards;
+}
+
+.sidebar-backdrop-exit {
+  animation: sidebar-backdrop-exit 200ms ease-in forwards;
+}
+
+.sidebar-drawer-enter {
+  animation: sidebar-drawer-enter 200ms ease-out forwards;
+}
+
+.sidebar-drawer-exit {
+  animation: sidebar-drawer-exit 200ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-backdrop-enter,
+  .sidebar-backdrop-exit,
+  .sidebar-drawer-enter,
+  .sidebar-drawer-exit {
+    animation-duration: 1ms;
+  }
+}

@@ -1,7 +1,10 @@
 'use client';
 
+import { dashboardKeyboardShortcuts } from '@/components/dashboard/navigation';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Header } from '@/components/dashboard/Header';
+import { KeyboardShortcutsDialog } from '@/components/ui/keyboard-shortcuts-dialog';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useSSE, type DashboardUpdate } from '@/hooks/useSSE';
 import { createContext, useContext, useCallback, useState } from 'react';
 
@@ -29,6 +32,7 @@ export default function DashboardLayout({
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const { data, isConnected, lastMessageAt } = useSSE<DashboardUpdate>(`/api/sse/updates?key=${refreshKey}`, {
     onError: (err) => console.error('SSE Error:', err),
   });
@@ -37,6 +41,15 @@ export default function DashboardLayout({
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
+
+  useKeyboardShortcuts({
+    enabled: !shortcutsOpen,
+    onNavigate: () => {
+      setSidebarOpen(false);
+      setShortcutsOpen(false);
+    },
+    onOpenHelp: () => setShortcutsOpen(true),
+  });
 
   return (
     <DashboardContext.Provider value={{ data, isConnected, lastUpdated, lastMessageAt, refresh }}>
@@ -49,6 +62,7 @@ export default function DashboardLayout({
             lastMessageAt={lastMessageAt}
             onRefresh={refresh}
             onMenuClick={() => setSidebarOpen(true)}
+            onShortcutsClick={() => setShortcutsOpen(true)}
           />
           <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">
             <div className="max-w-full">
@@ -57,6 +71,11 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      <KeyboardShortcutsDialog
+        open={shortcutsOpen}
+        onOpenChange={setShortcutsOpen}
+        shortcuts={dashboardKeyboardShortcuts}
+      />
     </DashboardContext.Provider>
   );
 }
