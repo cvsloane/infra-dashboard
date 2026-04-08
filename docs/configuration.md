@@ -12,6 +12,7 @@ Complete documentation for all environment variables in infra-dashboard. Use thi
 - [Site Health](#site-health) — Health check exclusions
 - [Worker Supervisor](#worker-supervisor) — Worker health monitoring
 - [Authentication](#authentication) — Dashboard access control
+- [Self Metrics](#self-metrics) — Prometheus self-scrape endpoint
 - [Example Configurations](#example-configurations) — Ready-to-use templates
 
 ---
@@ -374,6 +375,39 @@ DASHBOARD_PASSWORD=Tr0ub4dor&3-Infra-Dash-2025!
 ```
 
 > **Note:** This is just an example format. Generate your own unique password using a password manager.
+
+---
+
+## Self Metrics
+
+### `METRICS_TOKEN`
+
+**Optional** — Bearer token to protect the `/metrics` endpoint.
+
+```bash
+METRICS_TOKEN=your-secret-token
+```
+
+When set, the `/metrics` endpoint (Prometheus-format self-metrics) requires authentication via one of:
+
+| Header | Format |
+|--------|--------|
+| `Authorization` | `Bearer <token>` |
+| `x-metrics-token` | `<token>` |
+
+When not set, the `/metrics` endpoint is publicly accessible.
+
+**Exposed metrics include:**
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `infra_dashboard_bullmq_op_duration_seconds` | Histogram | BullMQ/Redis operation latency |
+| `infra_dashboard_bullmq_op_total` | Counter | BullMQ/Redis operation count |
+| `infra_dashboard_bullmq_discovered_queues` | Gauge | Number of discovered queues |
+| `infra_dashboard_uptime_kuma_metrics_fetch_duration_seconds` | Histogram | Uptime Kuma fetch latency |
+| `infra_dashboard_uptime_kuma_metrics_fetch_total` | Counter | Uptime Kuma fetch count |
+
+Plus default Node.js process metrics from `prom-client`.
 
 ---
 

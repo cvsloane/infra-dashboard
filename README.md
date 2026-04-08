@@ -70,7 +70,9 @@ Each guide is designed to be self-contained—start where you need help:
 
 | Guide | Description | When You Need It |
 |-------|-------------|------------------|
-| [Getting Started](docs/getting-started.md) | Installation and initial setup | First time setup |
+| [Setup Guide](SETUP.md) | Quick install and configuration reference | First time setup |
+| [API Reference](API.md) | Complete API endpoint documentation | Integrating or extending |
+| [Getting Started](docs/getting-started.md) | Detailed installation and setup walkthrough | Step-by-step setup |
 | [Configuration](docs/configuration.md) | Complete environment variable reference | Customizing your setup |
 | [Coolify Setup](docs/coolify-setup.md) | Deep dive into Coolify integration | Connecting to Coolify |
 | [Prometheus Setup](docs/prometheus-setup.md) | Metrics collection with exporters | Adding VPS/DB metrics |
@@ -116,58 +118,36 @@ Each guide is designed to be self-contained—start where you need help:
 
 ## API Reference
 
-### Authentication
+> See [**API.md**](API.md) for the complete API documentation with request/response examples.
+
+### Quick Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/auth/login` | POST | Authenticate with dashboard password |
 | `/api/auth/logout` | POST | Clear session cookie |
-
-### Coolify
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
+| `/api/health` | GET | Health check (public, no auth) |
 | `/api/coolify/applications` | GET | List all Coolify applications |
-| `/api/coolify/deployments` | GET | Get active + recent deployments with stats |
-| `/api/coolify/deployments?view=all` | GET | Paginated deployment history with filters |
-| `/api/coolify/deployments/[uuid]` | GET | Get single deployment with logs |
-| `/api/coolify/deployments/[uuid]/cancel` | POST | Cancel queued/in-progress deployment |
-| `/api/coolify/deploy` | POST | Trigger deployment for an application |
-
-### BullMQ Queues
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/bullmq/queues` | GET | Get all queue stats with worker health |
-| `/api/bullmq/jobs/failed` | GET | Get failed jobs (supports `?queue=` filter) |
-| `/api/bullmq/jobs/failed` | POST | Retry/delete jobs (`action`: retry, delete, retry_all, delete_all) |
-| `/api/bullmq/queues/[queue]/pause` | POST | Pause queue processing |
-| `/api/bullmq/queues/[queue]/resume` | POST | Resume paused queue |
-
-### Infrastructure
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Basic health check (public, no auth required) |
+| `/api/coolify/deployments` | GET | Active + recent deployments with stats |
+| `/api/coolify/deployments?view=all` | GET | Paginated deployment history |
+| `/api/coolify/deployments/[uuid]` | GET | Single deployment with logs |
+| `/api/coolify/deployments/[uuid]/cancel` | POST | Cancel a deployment |
+| `/api/coolify/deploy` | POST | Trigger deployment |
+| `/api/bullmq/queues` | GET | Queue stats with worker health |
+| `/api/bullmq/jobs/failed` | GET/POST | View and manage failed jobs |
+| `/api/bullmq/queues/[queue]/pause` | POST | Pause a queue |
+| `/api/bullmq/queues/[queue]/resume` | POST | Resume a queue |
 | `/api/postgres/health` | GET | PostgreSQL + PgBouncer metrics |
-| `/api/postgres/backups` | GET | PostgreSQL backup freshness (logical/WAL/base/drill) |
+| `/api/postgres/backups` | GET | Backup freshness (logical/WAL/base/drill) |
 | `/api/servers/status` | GET | VPS metrics and site health |
-| `/api/workers/status` | GET | Worker supervisor status (systemd/PM2/Coolify) |
-| `/api/sse/updates` | GET | Server-Sent Events stream for real-time updates |
-
-### AutoHEAL
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/autoheal/config` | GET | Get AutoHEAL configuration |
-| `/api/autoheal/config` | POST | Update AutoHEAL configuration |
-
-### Agents
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/agents/runs` | GET | Get latest run summaries for all agents |
-| `/api/agents/[name]/history` | GET | Get run history for a specific agent (supports `?limit=` parameter) |
+| `/api/workers/status` | GET | Worker supervisor status |
+| `/api/sse/updates` | GET | SSE stream for real-time updates |
+| `/api/alertmanager/alerts` | GET | Firing and suppressed alerts |
+| `/api/autoheal/config` | GET/POST | AutoHEAL configuration |
+| `/api/autoheal/status` | GET | AutoHEAL worker heartbeat and events |
+| `/api/agents/runs` | GET | Latest run summaries for all agents |
+| `/api/agents/[name]/history` | GET | Run history for a specific agent |
+| `/metrics` | GET | Self-metrics (Prometheus format) |
 
 ## Configuration
 
@@ -179,7 +159,31 @@ The dashboard is configured entirely through environment variables. See [`.env.e
 |----------|---------|----------|
 | `COOLIFY_API_URL` | Your Coolify API endpoint | Yes |
 | `COOLIFY_API_TOKEN` | API token for Coolify access | Yes |
+| `COOLIFY_DB_URL` | Direct PostgreSQL connection for real-time updates | Recommended |
 | `DASHBOARD_PASSWORD` | Protects the dashboard with authentication | Strongly recommended |
+
+### Optional Integration Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `PROMETHEUS_URL` | Prometheus server URL | — |
+| `VPS_PRIMARY_INSTANCE` | node_exporter target for app server | — |
+| `VPS_DATABASE_INSTANCE` | node_exporter target for DB server | — |
+| `REDIS_URL` | Full Redis connection URL (overrides individual params) | — |
+| `REDIS_HOST` | Redis hostname | `127.0.0.1` |
+| `REDIS_PORT` | Redis port | `6379` |
+| `REDIS_PASSWORD` | Redis password | — |
+| `ALERTMANAGER_URL` | Alertmanager server URL | — |
+| `UPTIME_KUMA_URL` | Uptime Kuma server URL | — |
+| `UPTIME_KUMA_STATUS_PAGE` | Status page slug | — |
+| `METRICS_TOKEN` | Bearer token for `/metrics` endpoint | — (public) |
+| `SITE_HEALTH_EXCLUSIONS` | Comma-separated apps to exclude from health checks | — |
+| `SITE_HEALTH_SSL_EXPIRY_WARN_DAYS` | Days before SSL cert expiry to show warning | `14` |
+| `WORKER_STATUS_MAX_AGE_SEC` | Max age before worker status is stale | `180` |
+| `AUTOHEAL_STATUS_KEY` | Redis key for AutoHEAL heartbeat | `infra:autoheal:status` |
+| `AUTOHEAL_EVENTS_KEY` | Redis key for AutoHEAL events | `infra:autoheal:events` |
+| `AUTOHEAL_STATUS_MAX_AGE_SEC` | Max age before AutoHEAL heartbeat is stale | `180` |
+| `AUTOHEAL_EVENTS_LIMIT` | Max AutoHEAL events to display | `50` |
 
 > **Security note:** Always set `DASHBOARD_PASSWORD` in production. Never commit credentials to version control.
 
