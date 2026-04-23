@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, Archive, Bell, Database, Globe, Rocket, Server } from 'lucide-react';
+import { Activity, Archive, Bell, Bot, Database, Globe, Rocket, Server } from 'lucide-react';
 import type { OverviewData } from '@/types/overview';
 import { formatDurationShort } from '@/lib/format';
 
@@ -13,9 +13,10 @@ export type WidgetId =
   | 'postgres'
   | 'backups'
   | 'queues'
-  | 'workers';
+  | 'workers'
+  | 'hermes';
 
-export const MAX_VISIBLE_WIDGETS = 6;
+export const MAX_VISIBLE_WIDGETS = 7;
 export const PINNED_WIDGETS_STORAGE_KEY = 'infra-dashboard:pinned-widgets:v1';
 
 export interface WidgetViewModel {
@@ -162,6 +163,30 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     },
   },
   {
+    id: 'hermes',
+    label: 'Hermes',
+    href: '/hermes',
+    icon: Bot,
+    getViewModel: (data) => {
+      if (!data) return { status: 'loading', primary: '—' };
+      const summary = data.hermes;
+      if (!summary) {
+        return { status: 'unknown', primary: 'No data', secondary: 'Hermes summary unavailable' };
+      }
+      const attention = summary.counts.error + summary.counts.warning;
+      const primary = attention > 0 ? `${attention} need review` : `${summary.counts.ok}/${summary.counts.total} OK`;
+      return {
+        status: summary.status,
+        primary,
+        secondary: summary.message,
+        meta: [
+          { label: 'Err', value: `${summary.counts.error}` },
+          { label: 'Warn', value: `${summary.counts.warning}` },
+        ],
+      };
+    },
+  },
+  {
     id: 'coolify',
     label: 'Coolify',
     href: '/coolify',
@@ -190,6 +215,7 @@ export const DEFAULT_PINNED_WIDGET_IDS: WidgetId[] = [
   'backups',
   'queues',
   'deployments',
+  'hermes',
 ];
 
 export function normalizeWidgetIds(value: unknown): WidgetId[] {
@@ -204,4 +230,3 @@ export function normalizeWidgetIds(value: unknown): WidgetId[] {
   }
   return out;
 }
-

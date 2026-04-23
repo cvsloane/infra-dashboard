@@ -152,6 +152,28 @@ export function buildIssues(data: OverviewData | null): Issue[] {
     });
   }
 
+  // Hermes scheduled agent fleet
+  if (data.hermes) {
+    const attention = data.hermes.counts.error + data.hermes.counts.warning;
+    if (data.hermes.status === 'error' || data.hermes.counts.error > 0) {
+      issues.push({
+        id: 'hermes_jobs_error',
+        severity: 'critical',
+        title: 'Hermes jobs in error',
+        detail: data.hermes.message,
+        href: '/hermes',
+      });
+    } else if (data.hermes.status === 'warning' || attention > 0) {
+      issues.push({
+        id: 'hermes_jobs_warning',
+        severity: 'warning',
+        title: 'Hermes jobs need review',
+        detail: data.hermes.message,
+        href: '/hermes',
+      });
+    }
+  }
+
   // Postgres
   if (data.postgres.status === 'error') {
     issues.push({
@@ -236,4 +258,3 @@ export function buildIssues(data: OverviewData | null): Issue[] {
 
   return Array.from(dedup.values()).sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
 }
-

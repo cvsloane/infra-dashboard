@@ -1,5 +1,6 @@
 import type { CoolifyDeployment } from '@/types';
 import type { DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
+import type { HermesOverviewSummary } from '@/types/hermes';
 
 export interface OverviewSiteHealth {
   applicationUuid?: string;
@@ -73,6 +74,7 @@ export interface OverviewData {
       detail?: string;
     }>;
   };
+  hermes: HermesOverviewSummary | null;
   bullmq: {
     status: 'ok' | 'error' | 'warning' | 'loading' | 'unknown';
     message: string;

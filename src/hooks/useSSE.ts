@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
+import type { HermesOverviewSummary } from '@/types/hermes';
 
 interface SSEOptions {
   onConnect?: () => void;
@@ -250,5 +251,6 @@ export interface DashboardUpdate {
       metadata?: Record<string, string | number | boolean | null>;
     }>;
   } | null;
+  hermes?: HermesOverviewSummary | null;
   message?: string;
 }

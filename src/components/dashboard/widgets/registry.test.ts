@@ -30,6 +30,15 @@ function baseData(): OverviewData {
       ageSec: 5,
       items: [],
     },
+    hermes: {
+      status: 'ok',
+      message: 'Hermes fleet healthy',
+      checked_at: '2026-04-23T00:00:00.000Z',
+      last_update: '2026-04-23T00:00:00.000Z',
+      counts: { total: 64, ok: 64, warning: 0, error: 0, paused: 0, unknown: 0 },
+      nodes: {},
+      alerts: [],
+    },
     bullmq: { status: 'ok', message: 'Queues ok', queues: [], totalFailed: 0, workersDown: 0 },
     sites: { status: 'ok', downSites: [], allSites: [], totalSites: 4, healthySites: 4, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14 },
   };

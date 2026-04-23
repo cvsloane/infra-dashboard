@@ -117,6 +117,7 @@ export default function OverviewPage() {
     const sitesData = sseData.sites;
     const sitesList = sitesData?.sites || [];
     const workerSupervisor = sseData.workerSupervisor;
+    const hermesData = sseData.hermes ?? null;
     const workerSummary = workerSupervisor?.summary || { total: 0, ok: 0, warning: 0, down: 0 };
     const workerStatus = workerSupervisor
       ? workerSupervisor.stale
@@ -178,6 +179,7 @@ export default function OverviewPage() {
         ageSec: workerSupervisor?.ageSec,
         items: workerSupervisor?.items || [],
       },
+      hermes: hermesData,
       bullmq: {
         status: workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : 'ok',
         message: workersDown > 0
@@ -206,7 +208,7 @@ export default function OverviewPage() {
     if (isConnected) return;
     const fetchData = async () => {
       try {
-        const [coolifyRes, postgresRes, backupsRes, alertsRes, bullmqRes, sitesRes, workerRes] = await Promise.all([
+        const [coolifyRes, postgresRes, backupsRes, alertsRes, bullmqRes, sitesRes, workerRes, hermesRes] = await Promise.all([
           fetch('/api/coolify/applications'),
           fetch('/api/postgres/health'),
           fetch('/api/postgres/backups'),
@@ -214,6 +216,7 @@ export default function OverviewPage() {
           fetch('/api/bullmq/queues'),
           fetch('/api/servers/status'),
           fetch('/api/workers/status'),
+          fetch('/api/hermes/summary'),
         ]);
 
         const coolifyData = await coolifyRes.json();
@@ -225,6 +228,7 @@ export default function OverviewPage() {
         const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0, sslExpiringSoonCount: 0 } };
         const sitesList = sitesData.sites?.sites || [];
         const workerData = workerRes.ok ? await workerRes.json() : { status: null };
+        const hermesData = hermesRes.ok ? await hermesRes.json() : null;
 
         // Fetch recent deployments (now includes active, recent, and stats)
         const deploymentsRes = await fetch('/api/coolify/deployments');
@@ -312,6 +316,7 @@ export default function OverviewPage() {
             ageSec: workerSupervisor?.ageSec,
             items: workerSupervisor?.items || [],
           },
+          hermes: hermesData,
           bullmq: {
             status: workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : bullmqRes.ok ? 'ok' : 'error',
             message: workersDown > 0

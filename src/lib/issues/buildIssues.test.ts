@@ -44,6 +44,15 @@ function baseData(): OverviewData {
       ageSec: 5,
       items: [],
     },
+    hermes: {
+      status: 'ok',
+      message: 'Hermes fleet healthy',
+      checked_at: '2026-04-23T00:00:00.000Z',
+      last_update: '2026-04-23T00:00:00.000Z',
+      counts: { total: 64, ok: 64, warning: 0, error: 0, paused: 0, unknown: 0 },
+      nodes: {},
+      alerts: [],
+    },
     bullmq: {
       status: 'ok',
       message: 'Queues ok',
@@ -96,6 +105,21 @@ describe('buildIssues', () => {
     const issues = buildIssues(data);
     const issue = issues.find((i) => i.id === 'bullmq_workers_down');
     expect(issue?.severity).toBe('critical');
+  });
+
+  it('surfaces Hermes fleet warnings', () => {
+    const data = baseData();
+    data.hermes = {
+      ...data.hermes!,
+      status: 'warning',
+      message: '2 Hermes job(s) need review',
+      counts: { ...data.hermes!.counts, warning: 2, ok: 62 },
+    };
+
+    const issues = buildIssues(data);
+    const issue = issues.find((i) => i.id === 'hermes_jobs_warning');
+
+    expect(issue?.severity).toBe('warning');
   });
 
   it('flags Postgres high connections', () => {

@@ -7,6 +7,7 @@ import { getWorkerSupervisorStatus } from '@/lib/redis/workers';
 import { quickHealthCheck } from '@/lib/health/sites';
 import { getPostgresBackupsSummary } from '@/lib/backups/postgres';
 import { getAlertmanagerSummary } from '@/lib/alertmanager/client';
+import { getHermesOverviewSummary } from '@/lib/hermes/client';
 
 // Polling interval in milliseconds (15s to avoid Coolify rate limiting)
 const POLL_INTERVAL = 15000;
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
             vpsMetrics,
             siteHealth,
             workerSupervisor,
+            hermes,
           ] = await Promise.allSettled([
             withTimeout(coolifyHealth(), timeout, { ok: false, message: 'Timeout' }),
             withTimeout(prometheusHealth(), timeout, { ok: false, message: 'Timeout' }),
@@ -89,6 +91,7 @@ export async function GET(request: Request) {
             withTimeout(getAllVPSMetrics(), timeout, { appsVps: null, dbVps: null }),
             withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [] }),
             withTimeout(getWorkerSupervisorStatus(), timeout, null),
+            withTimeout(getHermesOverviewSummary(), timeout, null),
           ]);
 
           const deploymentsData = liveDeployments.status === 'fulfilled'
@@ -105,6 +108,9 @@ export async function GET(request: Request) {
 
           const workerSupervisorData = workerSupervisor.status === 'fulfilled'
             ? workerSupervisor.value
+            : null;
+          const hermesData = hermes.status === 'fulfilled'
+            ? hermes.value
             : null;
 
           const update = {
@@ -124,6 +130,7 @@ export async function GET(request: Request) {
             vps: vpsData,
             sites: sitesData,
             workerSupervisor: workerSupervisorData,
+            hermes: hermesData,
           };
 
           const data = `data: ${JSON.stringify(update)}\n\n`;

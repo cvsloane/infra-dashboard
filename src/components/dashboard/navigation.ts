@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Archive,
   Bell,
+  Bot,
   Database,
   LayoutDashboard,
   Rocket,
@@ -47,6 +48,7 @@ export const navGroups: DashboardNavGroup[] = [
     items: [
       { name: 'Queues', href: '/queues', icon: ListTodo },
       { name: 'Workers', href: '/workers', icon: Users },
+      { name: 'Hermes', href: '/hermes', icon: Bot },
       { name: 'Alerts', href: '/alerts', icon: Bell },
     ],
   },
@@ -60,6 +62,7 @@ export const dashboardKeyboardShortcuts: KeyboardShortcutDefinition[] = [
   { id: 'go-backups', keys: ['g', 'b'], description: 'Go to backups', href: '/backups' },
   { id: 'go-queues', keys: ['g', 'q'], description: 'Go to queues', href: '/queues' },
   { id: 'go-workers', keys: ['g', 'w'], description: 'Go to workers', href: '/workers' },
+  { id: 'go-hermes', keys: ['g', 'm'], description: 'Go to Hermes fleet', href: '/hermes' },
   { id: 'go-alerts', keys: ['g', 'a'], description: 'Go to alerts', href: '/alerts' },
   { id: 'show-help', keys: ['?'], description: 'Show keyboard shortcuts' },
 ]
