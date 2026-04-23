@@ -34,7 +34,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const { data, isConnected, lastMessageAt } = useSSE<DashboardUpdate>(`/api/sse/updates?key=${refreshKey}`, {
-    onError: (err) => console.error('SSE Error:', err),
+    onError: () => {},
   });
   const lastUpdated = data?.type === 'update' ? data.timestamp : undefined;
 
