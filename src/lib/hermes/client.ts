@@ -3,7 +3,9 @@ import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
 import type {
   HermesActionResponse,
+  HermesActionLogResponse,
   HermesActivityResponse,
+  HermesAlertsResponse,
   HermesCostSummary,
   HermesJobDetail,
   HermesOutput,
@@ -158,6 +160,14 @@ export async function getHermesCosts(window = '24h'): Promise<HermesCostSummary>
 
 export async function getHermesActivity(limit = 20): Promise<HermesActivityResponse> {
   return hermesSidecarFetch<HermesActivityResponse>(`/fleet/activity?limit=${limit}`);
+}
+
+export async function getHermesAlerts(window = '24h', limit = 100): Promise<HermesAlertsResponse> {
+  return hermesSidecarFetch<HermesAlertsResponse>(`/fleet/alerts?window=${encodeURIComponent(window)}&limit=${limit}`);
+}
+
+export async function getHermesActions(limit = 100): Promise<HermesActionLogResponse> {
+  return hermesSidecarFetch<HermesActionLogResponse>(`/fleet/actions?limit=${limit}`);
 }
 
 export async function performHermesJobAction(id: string, action: 'pause' | 'resume' | 'run-now'): Promise<HermesActionResponse> {

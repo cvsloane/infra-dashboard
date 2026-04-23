@@ -14,7 +14,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard';
 import { StatusCard } from '@/components/dashboard/StatusCard';
 import { formatDurationShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { HermesActivityResponse, HermesCostSummary, HermesHealthStatus, HermesJob, HermesRun, HermesSummary } from '@/types/hermes';
+import type { HermesActivityResponse, HermesAlertsResponse, HermesCostSummary, HermesHealthStatus, HermesJob, HermesRun, HermesSummary } from '@/types/hermes';
 
 const statusRank: Record<string, number> = { error: 0, warning: 1, stale: 1, overdue: 1, paused: 2, unknown: 3, ok: 4 };
 
@@ -146,6 +146,7 @@ export default function HermesPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [summary, setSummary] = useState<HermesSummary | null>(null);
   const [costs, setCosts] = useState<HermesCostSummary | null>(null);
+  const [alerts, setAlerts] = useState<HermesAlertsResponse | null>(null);
   const [activity, setActivity] = useState<HermesRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -157,15 +158,17 @@ export default function HermesPage() {
   const fetchAll = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [summaryResponse, costsResponse, activityResponse] = await Promise.all([
+      const [summaryResponse, costsResponse, activityResponse, alertsResponse] = await Promise.all([
         fetch('/api/hermes/summary'),
         fetch('/api/hermes/costs?window=24h'),
         fetch('/api/hermes/activity?limit=20'),
+        fetch('/api/hermes/alerts?window=24h&limit=20'),
       ]);
       if (!summaryResponse.ok) throw new Error(`Hermes summary HTTP ${summaryResponse.status}`);
       setSummary((await summaryResponse.json()) as HermesSummary);
       if (costsResponse.ok) setCosts((await costsResponse.json()) as HermesCostSummary);
       if (activityResponse.ok) setActivity(((await activityResponse.json()) as HermesActivityResponse).events || []);
+      if (alertsResponse.ok) setAlerts((await alertsResponse.json()) as HermesAlertsResponse);
     } catch (error) {
       setSummary({
         status: 'warning',
@@ -269,6 +272,12 @@ export default function HermesPage() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" size="sm" asChild>
+            <Link href="/hermes/alerts">
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              Alerts
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
             <Link href="/hermes/costs">
               <DollarSign className="mr-2 h-4 w-4" />
               Costs
@@ -344,7 +353,7 @@ export default function HermesPage() {
         </div>
 
         <div className="space-y-4">
-          <StatusCard title="Attention" status={attentionCount > 0 ? 'warning' : 'ok'} message={`${attentionCount} jobs need review`} icon={AlertTriangle} stats={[{ label: 'Unknown', value: counts.unknown }, { label: 'Alerts', value: summary?.alerts.length || 0 }]} />
+          <StatusCard title="Attention" status={attentionCount > 0 || (alerts?.alert_count || 0) > 0 ? 'warning' : 'ok'} message={`${attentionCount} jobs need review`} icon={AlertTriangle} stats={[{ label: 'Unknown', value: counts.unknown }, { label: 'Alerts 24h', value: alerts?.alert_count || 0 }]} />
           <ActivityTicker events={activity} />
         </div>
       </div>

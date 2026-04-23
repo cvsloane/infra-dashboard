@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Bot, Clock, DollarSign, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
+import { ArrowLeft, Bot, Clock, DollarSign, ExternalLink, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -180,6 +180,7 @@ export default function HermesJobPage() {
                     <TableHead>Duration</TableHead>
                     <TableHead>Tokens</TableHead>
                     <TableHead>Cost</TableHead>
+                    <TableHead>Trace</TableHead>
                     <TableHead>Session</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -191,6 +192,15 @@ export default function HermesJobPage() {
                       <TableCell>{run.duration_ms ? formatDurationShort(Math.round(run.duration_ms / 1000)) : '—'}</TableCell>
                       <TableCell>{(run.input_tokens + run.output_tokens + run.cache_read_tokens + run.cache_write_tokens).toLocaleString()}</TableCell>
                       <TableCell>{money(run.actual_cost_usd || run.estimated_cost_usd)}</TableCell>
+                      <TableCell>
+                        {run.trace_url ? (
+                          <a href={run.trace_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                            Open <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">{run.trace_id ? run.trace_id.slice(0, 8) : '—'}</span>
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-[16rem] truncate font-mono text-xs">{run.session_id}</TableCell>
                     </TableRow>
                   ))}

@@ -91,6 +91,8 @@ export interface HermesRun {
   actual_cost_usd?: number | null;
   cost_status?: string | null;
   cost_source?: string | null;
+  trace_id?: string | null;
+  trace_url?: string | null;
   title?: string | null;
 }
 
@@ -178,4 +180,46 @@ export interface HermesActionResponse {
     stderr?: string;
   };
   audit?: Record<string, unknown>;
+}
+
+export interface HermesAlert {
+  timestamp?: string | null;
+  trace_id?: string | null;
+  trace_url?: string | null;
+  job: string;
+  alias?: string | null;
+  status: string;
+  router_status?: string | null;
+  title?: string | null;
+  target_key?: string | null;
+  target_label?: string | null;
+  outcome?: string | null;
+  reason?: string | null;
+  should_deliver?: boolean;
+}
+
+export interface HermesAlertsResponse {
+  status: string;
+  checked_at: string;
+  window: string;
+  alert_count: number;
+  error_count: number;
+  warning_count: number;
+  alerts: HermesAlert[];
+  by_job: Array<{
+    job: string;
+    count: number;
+    last_at?: string | null;
+    error: number;
+    warning: number;
+  }>;
+  by_target: Array<{ target: string; count: number }>;
+}
+
+export interface HermesActionLogResponse {
+  status: string;
+  checked_at: string;
+  count: number;
+  actions: Array<Record<string, unknown>>;
+  by_action: Array<{ action: string; count: number }>;
 }
