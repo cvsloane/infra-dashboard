@@ -1,7 +1,16 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
-import type { HermesOverviewSummary, HermesSummary } from '@/types/hermes';
+import type {
+  HermesActionResponse,
+  HermesActivityResponse,
+  HermesCostSummary,
+  HermesJobDetail,
+  HermesOutput,
+  HermesOverviewSummary,
+  HermesRunDetail,
+  HermesSummary,
+} from '@/types/hermes';
 
 const execFileAsync = promisify(execFile);
 
@@ -50,29 +59,46 @@ function sidecarBaseUrl(): string | null {
 }
 
 async function fetchFromSidecar(): Promise<HermesSummary> {
-  const baseUrl = sidecarBaseUrl();
-  if (!baseUrl) {
-    throw new Error('HERMES_SIDECAR_URL is not configured');
-  }
+  return hermesSidecarFetch<HermesSummary>('/fleet/summary');
+}
 
+export function hermesSidecarHeaders(): HeadersInit {
   const headers: HeadersInit = {};
   const token = process.env.HERMES_SIDECAR_TOKEN || process.env.HERMES_DASHBOARD_TOKEN;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  return headers;
+}
+
+export function getHermesSidecarBaseUrl(): string | null {
+  return sidecarBaseUrl();
+}
+
+export async function hermesSidecarFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = sidecarBaseUrl();
+  if (!baseUrl) {
+    throw new Error('HERMES_SIDECAR_URL is not configured');
+  }
+
+  const headers = {
+    ...hermesSidecarHeaders(),
+    ...(init?.headers || {}),
+  };
 
   const controller = new AbortController();
   const timeout = windowlessSetTimeout(() => controller.abort(), Number(process.env.HERMES_SIDECAR_TIMEOUT_MS || 5000));
   try {
-    const response = await fetch(`${baseUrl}/fleet/summary`, {
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...init,
       headers,
       cache: 'no-store',
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(`Hermes sidecar returned ${response.status}`);
+      throw new Error(`Hermes sidecar ${path} returned ${response.status}`);
     }
-    return (await response.json()) as HermesSummary;
+    return (await response.json()) as T;
   } finally {
     clearTimeout(timeout);
   }
@@ -112,4 +138,31 @@ export async function getHermesSummary(): Promise<HermesSummary> {
 export async function getHermesOverviewSummary(): Promise<HermesOverviewSummary> {
   const summary = await getHermesSummary();
   return compactSummary(summary);
+}
+
+export async function getHermesJobDetail(id: string): Promise<HermesJobDetail> {
+  return hermesSidecarFetch<HermesJobDetail>(`/fleet/jobs/${encodeURIComponent(id)}`);
+}
+
+export async function getHermesRunDetail(id: string, sessionId: string): Promise<HermesRunDetail> {
+  return hermesSidecarFetch<HermesRunDetail>(`/fleet/jobs/${encodeURIComponent(id)}/runs/${encodeURIComponent(sessionId)}`);
+}
+
+export async function getHermesLatestOutput(id: string): Promise<HermesOutput> {
+  return hermesSidecarFetch<HermesOutput>(`/fleet/jobs/${encodeURIComponent(id)}/output/latest`);
+}
+
+export async function getHermesCosts(window = '24h'): Promise<HermesCostSummary> {
+  return hermesSidecarFetch<HermesCostSummary>(`/fleet/costs?window=${encodeURIComponent(window)}`);
+}
+
+export async function getHermesActivity(limit = 20): Promise<HermesActivityResponse> {
+  return hermesSidecarFetch<HermesActivityResponse>(`/fleet/activity?limit=${limit}`);
+}
+
+export async function performHermesJobAction(id: string, action: 'pause' | 'resume' | 'run-now'): Promise<HermesActionResponse> {
+  return hermesSidecarFetch<HermesActionResponse>(`/fleet/jobs/${encodeURIComponent(id)}/${action}`, {
+    method: 'POST',
+    headers: { 'X-Hermes-Actor': 'infra-dashboard' },
+  });
 }
