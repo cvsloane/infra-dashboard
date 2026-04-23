@@ -6,9 +6,9 @@
  */
 
 import { cookies } from 'next/headers';
+import { COOKIE_MAX_AGE_SEC, createSessionToken, isValidSessionToken } from '@/lib/auth-token';
 
 const COOKIE_NAME = 'infra-dashboard-session';
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 // Validate password against environment variable
 export function validatePassword(password: string): boolean {
@@ -18,33 +18,6 @@ export function validatePassword(password: string): boolean {
     return true; // Allow access if no password set
   }
   return password === correctPassword;
-}
-
-// Create a simple session token (just a timestamp hash for simplicity)
-function createSessionToken(): string {
-  const timestamp = Date.now().toString();
-  // Simple token: base64 of timestamp + secret hash indicator
-  return Buffer.from(`${timestamp}:valid`).toString('base64');
-}
-
-// Validate session token
-function isValidSessionToken(token: string): boolean {
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    const [timestamp, marker] = decoded.split(':');
-
-    // Check marker is correct
-    if (marker !== 'valid') return false;
-
-    // Check token is not too old (7 days)
-    const tokenTime = parseInt(timestamp, 10);
-    const maxAge = COOKIE_MAX_AGE * 1000;
-    if (Date.now() - tokenTime > maxAge) return false;
-
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // Check if current request is authenticated (for server components)
@@ -73,7 +46,7 @@ export async function createSession(): Promise<void> {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: COOKIE_MAX_AGE,
+    maxAge: COOKIE_MAX_AGE_SEC,
     path: '/',
   });
 }
