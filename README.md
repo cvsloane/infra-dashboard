@@ -77,6 +77,12 @@ Each guide is designed to be self-contained—start where you need help:
 | [BullMQ Setup](docs/bullmq-setup.md) | Queue monitoring configuration | Monitoring job queues |
 | [AutoHEAL Setup](docs/autoheal.md) | Automatic recovery system | Enabling auto-remediation |
 
+## Operational Knowledge
+
+This repo keeps dashboard-specific lessons in [`tasks/lessons.md`](tasks/lessons.md). Broader VPS, DNS, Coolify, Rocket.Chat, M365, and service-ownership knowledge remains canonical in SloaneVault under `/home/cvsloane/SloaneVault/`, especially `tasks/lessons.md`, `tasks/decisions.jsonl`, and the VPS infrastructure runbooks.
+
+Mirror only the dashboard-relevant slice here: collector assumptions, health semantics, alert thresholds, service inventory modeling, and places where the UI could misrepresent an infrastructure fact.
+
 ## Architecture
 
 ```
