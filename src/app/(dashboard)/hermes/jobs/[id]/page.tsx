@@ -4,16 +4,17 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Bot, Clock, DollarSign, ExternalLink, Pause, Play, RefreshCw, RotateCw } from 'lucide-react';
+import { ArrowLeft, Bot, Clock, DollarSign, ExternalLink, FileDiff, Gauge, Pause, Play, RefreshCw, RotateCw, Send } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { formatDurationShort } from '@/lib/format';
-import type { HermesActionResponse, HermesJobDetail, HermesRun } from '@/types/hermes';
+import type { HermesActionResponse, HermesJobDetail, HermesPromptHistoryResponse, HermesRun } from '@/types/hermes';
 
 function timeAgo(value?: string | null) {
   if (!value) return 'Never';
@@ -43,17 +44,26 @@ export default function HermesJobPage() {
   const params = useParams();
   const id = String(params.id || '');
   const [detail, setDetail] = useState<HermesJobDetail | null>(null);
+  const [promptHistory, setPromptHistory] = useState<HermesPromptHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actioning, setActioning] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [scheduleDraft, setScheduleDraft] = useState('');
+  const [scheduleNote, setScheduleNote] = useState('');
 
   const fetchDetail = useCallback(async () => {
     setRefreshing(true);
     try {
-      const response = await fetch(`/api/hermes/jobs/${encodeURIComponent(id)}`);
+      const [response, historyResponse] = await Promise.all([
+        fetch(`/api/hermes/jobs/${encodeURIComponent(id)}`),
+        fetch(`/api/hermes/jobs/${encodeURIComponent(id)}/prompt-history`),
+      ]);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setDetail((await response.json()) as HermesJobDetail);
+      const payload = (await response.json()) as HermesJobDetail;
+      setDetail(payload);
+      setScheduleDraft(String(payload.job.schedule_display || ''));
+      if (historyResponse.ok) setPromptHistory((await historyResponse.json()) as HermesPromptHistoryResponse);
     } catch (error) {
       setNotice({ kind: 'error', message: error instanceof Error ? error.message : 'Failed to fetch job detail' });
     } finally {
@@ -78,6 +88,25 @@ export default function HermesJobPage() {
       setTimeout(fetchDetail, 1200);
     } catch (error) {
       setNotice({ kind: 'error', message: error instanceof Error ? error.message : 'Action failed' });
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const proposeSchedule = async () => {
+    setActioning('schedule');
+    try {
+      const response = await fetch(`/api/hermes/jobs/${encodeURIComponent(id)}/schedule-proposal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedule: scheduleDraft, note: scheduleNote }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setNotice({ kind: 'success', message: `Schedule proposal recorded for ${detail?.job.name || 'job'}` });
+      setScheduleNote('');
+    } catch (error) {
+      setNotice({ kind: 'error', message: error instanceof Error ? error.message : 'Schedule proposal failed' });
     } finally {
       setActioning(null);
     }
@@ -151,18 +180,22 @@ export default function HermesJobPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <MetricCard title="Last Run" value={latestRun?.started_at ? timeAgo(latestRun.started_at) : 'Never'} subtitle={latestRun?.status || 'unknown'} icon={Clock} />
         <MetricCard title="Next Run" value={job.next_run_at ? timeAgo(job.next_run_at) : '—'} subtitle={job.schedule_display || '—'} icon={Bot} />
         <MetricCard title="Run Cost" value={money(latestRun?.actual_cost_usd || latestRun?.estimated_cost_usd)} subtitle="latest run" icon={DollarSign} />
         <MetricCard title="Avg Duration" value={averageDuration ? formatDurationShort(Math.round(averageDuration / 1000)) : '—'} subtitle={`${runs.length} runs loaded`} icon={Clock} />
+        <MetricCard title="Evaluator" value={detail.evaluator?.scores?.[0]?.score ?? detail.evaluator?.status ?? '—'} subtitle={detail.evaluator?.scores?.[0] ? `threshold ${detail.evaluator.scores[0].threshold}` : `${detail.evaluator?.all_scores?.length || 0} sampled`} icon={Gauge} />
       </div>
 
       <Tabs defaultValue="runs">
-        <TabsList>
+        <TabsList className="h-auto w-full flex-wrap justify-start md:w-fit">
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="output">Latest Output</TabsTrigger>
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
+          <TabsTrigger value="diff">Prompt Diff</TabsTrigger>
+          <TabsTrigger value="schedule">Schedule</TabsTrigger>
+          <TabsTrigger value="evaluator">Evaluator</TabsTrigger>
           <TabsTrigger value="config">Configuration</TabsTrigger>
         </TabsList>
 
@@ -230,6 +263,76 @@ export default function HermesJobPage() {
             </CardHeader>
             <CardContent>
               <pre className="max-h-[34rem] overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-relaxed whitespace-pre-wrap">{detail.prompt.content || 'Prompt content unavailable.'}</pre>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="diff">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FileDiff className="h-4 w-4" />
+                Prompt History
+              </CardTitle>
+              <div className="text-xs text-muted-foreground">{promptHistory?.prompt_path || detail.prompt.path || 'No prompt history path'}</div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(promptHistory?.commits || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">No prompt commits found.</div>
+              ) : promptHistory?.commits.map((commit) => (
+                <div key={commit.hash} className="rounded-md border">
+                  <div className="flex flex-col gap-1 border-b p-3 text-xs md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{commit.subject}</div>
+                      <div className="text-muted-foreground">{commit.short_hash} · {commit.author} · {commit.committed_at ? timeAgo(commit.committed_at) : 'time n/a'}</div>
+                    </div>
+                  </div>
+                  <pre className="max-h-80 overflow-auto p-3 text-xs leading-relaxed whitespace-pre-wrap">{commit.diff_to_next || 'No diff recorded.'}</pre>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="schedule">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Schedule Proposal</CardTitle>
+              <div className="text-xs text-muted-foreground">Current {job.schedule_display || 'schedule n/a'}</div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem]">
+                <Input value={scheduleDraft} onChange={(event) => setScheduleDraft(event.target.value)} placeholder="Cron expression or schedule label" />
+                <Input value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="Reason" />
+                <Button onClick={proposeSchedule} disabled={actioning === 'schedule' || !scheduleDraft.trim()}>
+                  <Send className="mr-2 h-4 w-4" />Propose
+                </Button>
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">Mutation mode: proposal-only</div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="evaluator">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Evaluator Scores</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(detail.evaluator?.all_scores || []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">No evaluator scores found in the latest reflection audit.</div>
+              ) : (detail.evaluator?.all_scores || []).map((score) => (
+                <div key={`${score.job}-${score.threshold}`} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <div>
+                    <div className="font-medium">{score.job}</div>
+                    <div className="text-xs text-muted-foreground">threshold {score.threshold}</div>
+                  </div>
+                  {score.score < score.threshold ? <Badge variant="destructive">{score.score}</Badge> : <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-700">{score.score}</Badge>}
+                </div>
+              ))}
+              {(detail.evaluator?.warnings || []).map((warning) => (
+                <div key={warning} className="rounded-md border border-yellow-500/30 p-3 text-xs text-muted-foreground">{warning}</div>
+              ))}
             </CardContent>
           </Card>
         </TabsContent>

@@ -114,6 +114,12 @@ export interface HermesJobDetail {
     path?: string | null;
     content?: string | null;
   };
+  evaluator?: {
+    status?: string | null;
+    scores?: HermesEvaluatorScore[];
+    all_scores?: HermesEvaluatorScore[];
+    warnings?: string[];
+  };
 }
 
 export interface HermesRunDetail {
@@ -139,6 +145,21 @@ export interface HermesCostSummary {
   pricing_version: string;
   total_cost_usd: number;
   run_count: number;
+  budget_alarms?: {
+    status: 'ok' | 'warning' | 'critical' | string;
+    window: string;
+    threshold_key: string;
+    warning_usd?: number | null;
+    critical_usd?: number | null;
+    job_alerts: Array<{
+      job_id?: string | null;
+      job_name?: string | null;
+      cost_usd: number;
+      warning_usd: number;
+    }>;
+    configured: boolean;
+    mutations: string;
+  };
   by_model: Array<{
     model: string;
     provider: string;
@@ -263,5 +284,127 @@ export interface HermesObservabilityResponse {
     exported_envelope_count: number;
     updated_at?: string | null;
     latest_exported_at?: string | null;
+  };
+}
+
+export interface HermesRoadmapItem {
+  area: string;
+  status: string;
+  configured_count: number;
+  expected_count: number;
+  surface: string;
+  remaining?: string | null;
+}
+
+export interface HermesEvaluatorScore {
+  job: string;
+  score: number;
+  threshold: number;
+}
+
+export interface HermesRoadmapResponse {
+  status: string;
+  checked_at: string;
+  config_path: string;
+  activation_matrix: {
+    status: string;
+    title: string;
+    message: string;
+    metrics: {
+      area_count: number;
+      ready_or_active_count: number;
+      remaining_count: number;
+    };
+    details: {
+      items: HermesRoadmapItem[];
+      config_path: string;
+      mutations: string;
+    };
+  };
+  reflection: {
+    status: string;
+    title: string;
+    message: string;
+    metrics: Record<string, number>;
+    details: {
+      warnings?: string[];
+      latest_scores?: HermesEvaluatorScore[];
+      memory_dirs?: Record<string, boolean>;
+      rubrics?: Record<string, boolean>;
+      tool_hook_event_count_48h?: number;
+      langfuse?: Record<string, unknown>;
+    };
+  };
+}
+
+export interface HermesMemoryResponse {
+  status: string;
+  checked_at: string;
+  root: string;
+  exists: boolean;
+  agent_count: number;
+  agents: Array<{
+    agent: string;
+    path: string;
+    file_count: number;
+    latest_modified_at?: string | null;
+    files: Array<{
+      path: string;
+      relative_path: string;
+      size_bytes: number;
+      modified_at?: string | null;
+      preview: string;
+    }>;
+  }>;
+}
+
+export interface HermesHookHistoryResponse {
+  status: string;
+  checked_at: string;
+  window: string;
+  event_count: number;
+  events: Array<{
+    timestamp?: string | null;
+    trace_id?: string | null;
+    trace_url?: string | null;
+    event: string;
+    job?: string | null;
+    tool?: string | null;
+    status?: string | null;
+    reason?: string | null;
+  }>;
+  by_event: Array<{ event: string; count: number }>;
+}
+
+export interface HermesPromptHistoryResponse {
+  status: string;
+  checked_at: string;
+  job: HermesJob;
+  prompt_path?: string | null;
+  current_content?: string | null;
+  commits: Array<{
+    hash: string;
+    short_hash: string;
+    author: string;
+    committed_at?: string | null;
+    subject: string;
+    diff_to_next: string;
+  }>;
+}
+
+export interface HermesScheduleProposalResponse {
+  status: string;
+  checked_at: string;
+  proposal: {
+    timestamp: string;
+    actor: string;
+    job_id?: string | null;
+    job_name?: string | null;
+    job_slug?: string | null;
+    current_schedule?: unknown;
+    proposed_schedule: string;
+    note: string;
+    status: string;
+    mutations: string;
   };
 }

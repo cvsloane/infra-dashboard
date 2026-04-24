@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Activity, AlertTriangle, Bot, CheckCircle, Clock, DollarSign, ExternalLink, Eye, RefreshCw, Search, Server, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Brain, CheckCircle, Clock, DollarSign, ExternalLink, Eye, History, RefreshCw, Route, Search, Server, XCircle } from 'lucide-react';
 import { useDashboard } from '../layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -324,12 +324,12 @@ export default function HermesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold">Hermes Fleet</h1>
           <p className="text-sm text-muted-foreground">{summary?.message || 'Scheduled agent job health'}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href="/hermes/alerts">
               <AlertTriangle className="mr-2 h-4 w-4" />
@@ -340,6 +340,24 @@ export default function HermesPage() {
             <Link href="/hermes/costs">
               <DollarSign className="mr-2 h-4 w-4" />
               Costs
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/hermes/roadmap">
+              <Route className="mr-2 h-4 w-4" />
+              Roadmap
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/hermes/memory">
+              <Brain className="mr-2 h-4 w-4" />
+              Memory
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/hermes/hooks">
+              <History className="mr-2 h-4 w-4" />
+              Hooks
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={fetchAll} disabled={refreshing}>

@@ -8,10 +8,15 @@ import type {
   HermesAlertsResponse,
   HermesCostSummary,
   HermesJobDetail,
+  HermesHookHistoryResponse,
+  HermesMemoryResponse,
   HermesObservabilityResponse,
   HermesOutput,
+  HermesPromptHistoryResponse,
   HermesOverviewSummary,
+  HermesRoadmapResponse,
   HermesRunDetail,
+  HermesScheduleProposalResponse,
   HermesSummary,
 } from '@/types/hermes';
 
@@ -173,6 +178,30 @@ export async function getHermesActions(limit = 100): Promise<HermesActionLogResp
 
 export async function getHermesObservability(): Promise<HermesObservabilityResponse> {
   return hermesSidecarFetch<HermesObservabilityResponse>('/fleet/observability');
+}
+
+export async function getHermesRoadmap(): Promise<HermesRoadmapResponse> {
+  return hermesSidecarFetch<HermesRoadmapResponse>('/fleet/roadmap');
+}
+
+export async function getHermesMemory(): Promise<HermesMemoryResponse> {
+  return hermesSidecarFetch<HermesMemoryResponse>('/fleet/memory');
+}
+
+export async function getHermesHooks(window = '24h', limit = 100): Promise<HermesHookHistoryResponse> {
+  return hermesSidecarFetch<HermesHookHistoryResponse>(`/fleet/hooks?window=${encodeURIComponent(window)}&limit=${limit}`);
+}
+
+export async function getHermesPromptHistory(id: string): Promise<HermesPromptHistoryResponse> {
+  return hermesSidecarFetch<HermesPromptHistoryResponse>(`/fleet/jobs/${encodeURIComponent(id)}/prompt-history`);
+}
+
+export async function proposeHermesSchedule(id: string, schedule: string, note: string): Promise<HermesScheduleProposalResponse> {
+  return hermesSidecarFetch<HermesScheduleProposalResponse>(`/fleet/jobs/${encodeURIComponent(id)}/schedule-proposal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Hermes-Actor': 'infra-dashboard' },
+    body: JSON.stringify({ schedule, note }),
+  });
 }
 
 export async function performHermesJobAction(id: string, action: 'pause' | 'resume' | 'run-now'): Promise<HermesActionResponse> {

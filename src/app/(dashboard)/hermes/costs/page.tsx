@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, BarChart3, DollarSign, ExternalLink, Eye, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BarChart3, DollarSign, ExternalLink, Eye, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,12 @@ function compactNumber(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString();
+}
+
+function alarmBadge(status?: string) {
+  if (status === 'critical') return <Badge variant="destructive">critical</Badge>;
+  if (status === 'warning') return <Badge variant="outline" className="border-yellow-500/30 bg-yellow-500/10 text-yellow-700">warning</Badge>;
+  return <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-700">{status || 'ok'}</Badge>;
 }
 
 export default function HermesCostsPage() {
@@ -90,7 +96,7 @@ export default function HermesCostsPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard title="Total Cost" value={money(data?.total_cost_usd)} subtitle={data?.window || window} icon={DollarSign} />
         <MetricCard title="Runs" value={(data?.run_count || 0).toLocaleString()} subtitle="Hermes cron sessions" icon={BarChart3} />
-        <MetricCard title="Pricing" value={data?.pricing_version || '—'} subtitle="estimate source" icon={DollarSign} />
+        <MetricCard title="Budget" value={data?.budget_alarms?.status || 'ok'} subtitle={`warn ${money(data?.budget_alarms?.warning_usd)}`} icon={AlertTriangle} />
         <MetricCard
           title="Trace Backend"
           value={observability?.status === 'success' ? 'Live' : 'Check'}
@@ -98,6 +104,22 @@ export default function HermesCostsPage() {
           icon={Eye}
         />
       </div>
+
+      {data?.budget_alarms && (
+        <Card className={data.budget_alarms.status === 'critical' ? 'border-red-500/30' : data.budget_alarms.status === 'warning' ? 'border-yellow-500/30' : undefined}>
+          <CardContent className="flex flex-col gap-3 py-4 text-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="flex items-center gap-2 font-medium">
+                Budget alarm {alarmBadge(data.budget_alarms.status)}
+              </div>
+              <div className="text-muted-foreground">
+                {data.budget_alarms.threshold_key} warning {money(data.budget_alarms.warning_usd)} · critical {money(data.budget_alarms.critical_usd)} · mutations {data.budget_alarms.mutations}
+              </div>
+            </div>
+            <Badge variant="outline">{data.budget_alarms.job_alerts.length} job alerts</Badge>
+          </CardContent>
+        </Card>
+      )}
 
       {observability?.langfuse.base_url && (
         <Card>
