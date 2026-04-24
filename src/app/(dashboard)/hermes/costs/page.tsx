@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, BarChart3, DollarSign, RefreshCw } from 'lucide-react';
+import { ArrowLeft, BarChart3, DollarSign, ExternalLink, Eye, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MetricCard } from '@/components/dashboard/MetricCard';
-import type { HermesCostSummary } from '@/types/hermes';
+import type { HermesCostSummary, HermesObservabilityResponse } from '@/types/hermes';
 
 function money(value?: number | null) {
   if (!Number.isFinite(value || NaN)) return '$0.00';
@@ -25,15 +25,20 @@ function compactNumber(value: number) {
 export default function HermesCostsPage() {
   const [window, setWindow] = useState('24h');
   const [data, setData] = useState<HermesCostSummary | null>(null);
+  const [observability, setObservability] = useState<HermesObservabilityResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchCosts = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch(`/api/hermes/costs?window=${window}`);
+      const [response, observabilityResponse] = await Promise.all([
+        fetch(`/api/hermes/costs?window=${window}`),
+        fetch('/api/hermes/observability'),
+      ]);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setData((await response.json()) as HermesCostSummary);
+      if (observabilityResponse.ok) setObservability((await observabilityResponse.json()) as HermesObservabilityResponse);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,11 +87,36 @@ export default function HermesCostsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard title="Total Cost" value={money(data?.total_cost_usd)} subtitle={data?.window || window} icon={DollarSign} />
         <MetricCard title="Runs" value={(data?.run_count || 0).toLocaleString()} subtitle="Hermes cron sessions" icon={BarChart3} />
         <MetricCard title="Pricing" value={data?.pricing_version || '—'} subtitle="estimate source" icon={DollarSign} />
+        <MetricCard
+          title="Trace Backend"
+          value={observability?.status === 'success' ? 'Live' : 'Check'}
+          subtitle={`${observability?.local_traces.unique_trace_count || 0} local traces · ${observability?.langfuse_export?.exported_envelope_count || 0} exported`}
+          icon={Eye}
+        />
       </div>
+
+      {observability?.langfuse.base_url && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 py-4 text-sm md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-medium">Langfuse drilldown is configured</div>
+              <div className="text-muted-foreground">
+                Health {observability.langfuse.health?.status_code || '—'} · Ready {observability.langfuse.ready?.status_code || '—'} · {(observability.langfuse_export?.exported_envelope_count || 0).toLocaleString()} exported envelopes
+              </div>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <a href={observability.langfuse.base_url} target="_blank" rel="noreferrer">
+                Open Langfuse
+                <ExternalLink className="ml-2 h-3.5 w-3.5" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

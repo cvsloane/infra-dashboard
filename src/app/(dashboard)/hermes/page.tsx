@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Activity, AlertTriangle, Bot, CheckCircle, Clock, DollarSign, RefreshCw, Search, Server, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, CheckCircle, Clock, DollarSign, ExternalLink, Eye, RefreshCw, Search, Server, XCircle } from 'lucide-react';
 import { useDashboard } from '../layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { MetricCard } from '@/components/dashboard/MetricCard';
 import { StatusCard } from '@/components/dashboard/StatusCard';
 import { formatDurationShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { HermesActivityResponse, HermesAlertsResponse, HermesCostSummary, HermesHealthStatus, HermesJob, HermesRun, HermesSummary } from '@/types/hermes';
+import type { HermesActivityResponse, HermesAlertsResponse, HermesCostSummary, HermesHealthStatus, HermesJob, HermesObservabilityResponse, HermesRun, HermesSummary } from '@/types/hermes';
 
 const statusRank: Record<string, number> = { error: 0, warning: 1, stale: 1, overdue: 1, paused: 2, unknown: 3, ok: 4 };
 
@@ -123,6 +123,62 @@ function ActivityTicker({ events }: { events: HermesRun[] }) {
   );
 }
 
+function ObservabilityPanel({ data }: { data: HermesObservabilityResponse | null }) {
+  const status = data?.status === 'success' ? 'ok' : data?.status === 'error' ? 'error' : 'warning';
+  const badge = badgeFor(status);
+  const healthCode = data?.langfuse.health?.status_code;
+  const readyCode = data?.langfuse.ready?.status_code;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between gap-2 text-sm">
+          <span className="flex items-center gap-2">
+            <Eye className="h-4 w-4" />
+            Observability
+          </span>
+          <Badge variant={badge.variant} className={badge.className}>
+            {status}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">{data?.message || 'Observability status unavailable.'}</p>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <div className="text-muted-foreground">Trace events</div>
+            <div className="font-medium">{(data?.local_traces.event_count || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Traces</div>
+            <div className="font-medium">{(data?.local_traces.unique_trace_count || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Exported</div>
+            <div className="font-medium">{(data?.langfuse_export?.exported_envelope_count || 0).toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Health</div>
+            <div className="font-medium">{healthCode || '—'}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Ready</div>
+            <div className="font-medium">{readyCode || '—'}</div>
+          </div>
+        </div>
+        {data?.langfuse.base_url && (
+          <Button variant="outline" size="sm" asChild className="w-full">
+            <a href={data.langfuse.base_url} target="_blank" rel="noreferrer">
+              Open Langfuse
+              <ExternalLink className="ml-2 h-3.5 w-3.5" />
+            </a>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function loadingView() {
   return (
     <div className="space-y-6">
@@ -147,6 +203,7 @@ export default function HermesPage() {
   const [summary, setSummary] = useState<HermesSummary | null>(null);
   const [costs, setCosts] = useState<HermesCostSummary | null>(null);
   const [alerts, setAlerts] = useState<HermesAlertsResponse | null>(null);
+  const [observability, setObservability] = useState<HermesObservabilityResponse | null>(null);
   const [activity, setActivity] = useState<HermesRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,17 +215,19 @@ export default function HermesPage() {
   const fetchAll = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [summaryResponse, costsResponse, activityResponse, alertsResponse] = await Promise.all([
+      const [summaryResponse, costsResponse, activityResponse, alertsResponse, observabilityResponse] = await Promise.all([
         fetch('/api/hermes/summary'),
         fetch('/api/hermes/costs?window=24h'),
         fetch('/api/hermes/activity?limit=20'),
         fetch('/api/hermes/alerts?window=24h&limit=20'),
+        fetch('/api/hermes/observability'),
       ]);
       if (!summaryResponse.ok) throw new Error(`Hermes summary HTTP ${summaryResponse.status}`);
       setSummary((await summaryResponse.json()) as HermesSummary);
       if (costsResponse.ok) setCosts((await costsResponse.json()) as HermesCostSummary);
       if (activityResponse.ok) setActivity(((await activityResponse.json()) as HermesActivityResponse).events || []);
       if (alertsResponse.ok) setAlerts((await alertsResponse.json()) as HermesAlertsResponse);
+      if (observabilityResponse.ok) setObservability((await observabilityResponse.json()) as HermesObservabilityResponse);
     } catch (error) {
       setSummary({
         status: 'warning',
@@ -354,6 +413,7 @@ export default function HermesPage() {
 
         <div className="space-y-4">
           <StatusCard title="Attention" status={attentionCount > 0 || (alerts?.alert_count || 0) > 0 ? 'warning' : 'ok'} message={`${attentionCount} jobs need review`} icon={AlertTriangle} stats={[{ label: 'Unknown', value: counts.unknown }, { label: 'Alerts 24h', value: alerts?.alert_count || 0 }]} />
+          <ObservabilityPanel data={observability} />
           <ActivityTicker events={activity} />
         </div>
       </div>

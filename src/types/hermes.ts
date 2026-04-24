@@ -223,3 +223,45 @@ export interface HermesActionLogResponse {
   actions: Array<Record<string, unknown>>;
   by_action: Array<{ action: string; count: number }>;
 }
+
+export interface HermesObservabilityResponse {
+  status: 'success' | 'warning' | 'error';
+  checked_at: string;
+  message: string;
+  langfuse: {
+    configured: boolean;
+    base_url?: string | null;
+    project_id?: string | null;
+    trace_url_template_configured: boolean;
+    public_key_configured: boolean;
+    secret_key_configured: boolean;
+    health?: {
+      ok: boolean;
+      status_code?: number | null;
+      latency_ms?: number | null;
+      error?: string | null;
+    } | null;
+    ready?: {
+      ok: boolean;
+      status_code?: number | null;
+      latency_ms?: number | null;
+      error?: string | null;
+    } | null;
+  };
+  local_traces: {
+    path: string;
+    exists: boolean;
+    event_count: number;
+    recent_event_count_24h: number;
+    unique_trace_count: number;
+    latest_event_at?: string | null;
+    event_counts: Record<string, number>;
+  };
+  langfuse_export?: {
+    path: string;
+    exists: boolean;
+    exported_envelope_count: number;
+    updated_at?: string | null;
+    latest_exported_at?: string | null;
+  };
+}

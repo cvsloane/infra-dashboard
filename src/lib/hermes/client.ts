@@ -8,6 +8,7 @@ import type {
   HermesAlertsResponse,
   HermesCostSummary,
   HermesJobDetail,
+  HermesObservabilityResponse,
   HermesOutput,
   HermesOverviewSummary,
   HermesRunDetail,
@@ -168,6 +169,10 @@ export async function getHermesAlerts(window = '24h', limit = 100): Promise<Herm
 
 export async function getHermesActions(limit = 100): Promise<HermesActionLogResponse> {
   return hermesSidecarFetch<HermesActionLogResponse>(`/fleet/actions?limit=${limit}`);
+}
+
+export async function getHermesObservability(): Promise<HermesObservabilityResponse> {
+  return hermesSidecarFetch<HermesObservabilityResponse>('/fleet/observability');
 }
 
 export async function performHermesJobAction(id: string, action: 'pause' | 'resume' | 'run-now'): Promise<HermesActionResponse> {
