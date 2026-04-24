@@ -68,6 +68,8 @@ export interface QueueStats {
   paused: number;
   isPaused?: boolean;
   workerActive?: boolean;
+  workerState?: 'active' | 'idle' | 'down' | 'unknown';
+  workerStateReason?: string;
   workerLastSeen?: number;
   workerCount?: number;
   workerHeartbeatMaxAgeSec?: number;

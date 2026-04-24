@@ -23,6 +23,8 @@ interface QueueStats {
   paused: number;
   isPaused?: boolean;
   workerActive?: boolean;
+  workerState?: 'active' | 'idle' | 'down' | 'unknown';
+  workerStateReason?: string;
   workerLastSeen?: number;
   workerCount?: number;
   workerHeartbeatMaxAgeSec?: number;
@@ -309,10 +311,11 @@ export default function QueuesPage() {
     { waiting: 0, active: 0, completed: 0, failed: 0 }
   );
 
-  const queuesWithoutWorkers = queues.filter((q) =>
-    q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
+  const queuesWithWorkerDown = queues.filter((q) =>
+    q.workerState ? q.workerState === 'down' : q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
   );
-  const overallStatus = queuesWithoutWorkers.length > 0 ? 'error' : totals.failed > 0 ? 'warning' : queues.length > 0 ? 'ok' : 'unknown';
+  const idleQueues = queues.filter((q) => q.workerState === 'idle');
+  const overallStatus = queuesWithWorkerDown.length > 0 ? 'error' : totals.failed > 0 ? 'warning' : queues.length > 0 ? 'ok' : 'unknown';
   const filteredQueues = queues.filter((queue) =>
     queue.name.toLowerCase().includes(queueFilter.trim().toLowerCase())
   );
@@ -353,17 +356,17 @@ export default function QueuesPage() {
       )}
 
       {/* Worker Down Alert */}
-      {queuesWithoutWorkers.length > 0 && (
+      {queuesWithWorkerDown.length > 0 && (
         <Card className="border-red-500/50 bg-red-500/10">
           <CardContent className="pt-4">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               <span className="font-semibold text-red-500">
-                {queuesWithoutWorkers.length} Queue{queuesWithoutWorkers.length > 1 ? 's' : ''} Without Workers
+                {queuesWithWorkerDown.length} Queue{queuesWithWorkerDown.length > 1 ? 's' : ''} With Runnable Work and No Worker
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {queuesWithoutWorkers.map((q) => (
+              {queuesWithWorkerDown.map((q) => (
                 <div key={q.name} className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/20 text-sm">
                   <Cog className="h-3 w-3" />
                   {q.name}
@@ -411,10 +414,12 @@ export default function QueuesPage() {
         title="Queue System"
         status={overallStatus}
         message={
-          queuesWithoutWorkers.length > 0
-            ? `${queuesWithoutWorkers.length} queue${queuesWithoutWorkers.length > 1 ? 's' : ''} without workers`
+          queuesWithWorkerDown.length > 0
+            ? `${queuesWithWorkerDown.length} queue${queuesWithWorkerDown.length > 1 ? 's' : ''} with runnable work and no worker`
             : totals.failed > 0
             ? `${totals.failed} failed jobs need attention`
+            : idleQueues.length > 0
+            ? `${idleQueues.length} idle queue${idleQueues.length > 1 ? 's' : ''}, no runnable work`
             : `${queues.length} queues running`
         }
         icon={Activity}
@@ -451,7 +456,7 @@ export default function QueuesPage() {
               <MetricCard
                 title="Workers Online"
                 value={heartbeatQueues.length > 0 ? totalWorkers : '—'}
-                subtitle={queuesWithoutWorkers.length > 0 ? `${queuesWithoutWorkers.length} queue${queuesWithoutWorkers.length > 1 ? 's' : ''} without workers` : 'All queues staffed'}
+                subtitle={queuesWithWorkerDown.length > 0 ? `${queuesWithWorkerDown.length} broken queue${queuesWithWorkerDown.length > 1 ? 's' : ''}` : idleQueues.length > 0 ? `${idleQueues.length} idle queue${idleQueues.length > 1 ? 's' : ''}` : 'All queues staffed'}
                 icon={Users}
               />
               <MetricCard

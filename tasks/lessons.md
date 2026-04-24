@@ -11,6 +11,12 @@
 - Rocket.Chat UI lessons stay canonical in SloaneVault, but dashboard checks should model surface-specific verification when implemented. Web custom-script health, authenticated HTTPS GUI health, mobile-visible room/topic/message state, and backup/storage health are different signals and should not collapse into one generic "Rocket.Chat OK" badge.
 - For service inventory, prefer backlinks to SloaneVault runbooks over duplicating ownership facts here. If a dashboard fixture needs a service host, port, or health route, include the minimal test fixture and cite the canonical vault note in the implementation or task artifact.
 
+## 2026-04-24
+- Do not treat aggregate Hermes fleet health or `/api/health` as proof that all dashboard-backed remediation paths are healthy. When the dashboard shows something down, inspect the specific source behind the issue row: AutoHEAL heartbeat/status, worker supervisor, Alertmanager, site health, Postgres/PgBouncer container probes, and the relevant host service logs.
+- AutoHEAL health depends on three separate runtime facts: the systemd timer/service, the Coolify API URL/token, and Redis heartbeat writes. A worker can exit successfully after fixing the Coolify URL while still failing to update dashboard-visible state if Redis credentials or the deployed worker script are stale.
+- Site health intentionally reads Coolify DB rows with non-empty FQDNs, so retired or internal-only Coolify applications can show as "down" even when no public app should be restored. Before restarting anything, check the app row `status`, DNS resolution, and whether a container exists; stale apps should be excluded or retired rather than auto-redeployed.
+- Worker health has two separate dashboard counters: BullMQ queues without `stalled-check` heartbeats and the host worker-supervisor status key. Debug both sources separately before saying workers are down, and keep the supervisor script tolerant of PM2 non-JSON startup output so one bad collector does not erase the whole status report.
+
 ## 2026-02-09
 - When a deploy log shows "GitHub API call failed: This endpoint is temporarily being throttled" while `X-RateLimit-Remaining` is high, treat it as a GitHub secondary/abuse throttle, not core rate-limit exhaustion.
 - Make it explicit that GitHub REST API throttling can happen independently of `git clone/ls-remote` succeeding, so "other apps deploying" does not disprove the cause.

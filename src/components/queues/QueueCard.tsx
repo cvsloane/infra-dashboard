@@ -24,6 +24,8 @@ interface QueueStats {
   paused: number;
   isPaused?: boolean;
   workerActive?: boolean;
+  workerState?: 'active' | 'idle' | 'down' | 'unknown';
+  workerStateReason?: string;
   workerLastSeen?: number;
   workerCount?: number;
   workerHeartbeatMaxAgeSec?: number;
@@ -75,6 +77,21 @@ export function QueueCard({
   };
 
   const isPaused = queue.isPaused ?? queue.paused > 0;
+  const workerState = queue.workerState ?? (queue.workerActive === false ? 'down' : queue.workerActive ? 'active' : undefined);
+
+  const workerIndicator = () => {
+    if (!workerState) return null;
+    switch (workerState) {
+      case 'active':
+        return { label: 'Worker', title: queue.workerStateReason || 'Worker heartbeat present', className: 'text-green-500', spin: true };
+      case 'idle':
+        return { label: 'Idle', title: queue.workerStateReason || 'No runnable jobs', className: 'text-muted-foreground', spin: false };
+      case 'unknown':
+        return { label: 'Checking', title: queue.workerStateReason || 'Worker state is being confirmed', className: 'text-yellow-500', spin: false };
+      case 'down':
+        return { label: 'Down', title: queue.workerStateReason || 'Runnable jobs exist and no worker is connected', className: 'text-red-500', spin: false };
+    }
+  };
 
   const getStatus = () => {
     if (queue.failed > 0) return { label: 'Has Failures', variant: 'destructive' as const };
@@ -85,6 +102,7 @@ export function QueueCard({
   };
 
   const status = getStatus();
+  const worker = workerIndicator();
 
   const stats = [
     { icon: Clock, label: 'Waiting', value: queue.waiting, color: 'text-blue-500' },
@@ -108,16 +126,16 @@ export function QueueCard({
           <span className="truncate">{queue.name}</span>
         </CardTitle>
         <div className="flex items-center gap-2 shrink-0">
-          {queue.workerActive !== undefined && (
+          {worker && (
             <div
               className={cn(
                 'flex items-center gap-1 text-xs',
-                queue.workerActive ? 'text-green-500' : 'text-red-500'
+                worker.className
               )}
-              title={queue.workerActive ? 'Worker is running' : 'No worker connected'}
+              title={worker.title}
             >
-              <Cog className={cn('h-3 w-3', queue.workerActive && 'animate-spin')} style={{ animationDuration: '3s' }} />
-              <span className="hidden sm:inline">{queue.workerActive ? 'Worker' : 'No Worker'}</span>
+              <Cog className={cn('h-3 w-3', worker.spin && 'animate-spin')} style={{ animationDuration: '3s' }} />
+              <span className="hidden sm:inline">{worker.label}</span>
             </div>
           )}
           <Badge variant={status.variant}>{status.label}</Badge>

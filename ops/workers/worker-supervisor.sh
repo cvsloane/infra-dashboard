@@ -112,7 +112,10 @@ if [[ ${#systemd_units[@]} -gt 0 ]]; then
 fi
 
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 jlist 2>/dev/null | jq -c --arg re "$PM2_REGEX" '.[] | select(.name | test($re; "i"))' | while read -r row; do
+  export PM2_HOME="${PM2_HOME:-/root/.pm2}"
+  pm2_json="$(pm2 jlist 2>/dev/null || true)"
+  if jq -e 'type == "array"' >/dev/null 2>&1 <<< "$pm2_json"; then
+    jq -c --arg re "$PM2_REGEX" '.[] | select(.name | test($re; "i"))' <<< "$pm2_json" | while read -r row; do
     name="$(echo "$row" | jq -r '.name')"
     status_raw="$(echo "$row" | jq -r '.pm2_env.status')"
     restarts="$(echo "$row" | jq -r '.pm2_env.restart_time')"
@@ -138,7 +141,10 @@ if command -v pm2 >/dev/null 2>&1; then
       fi
     fi
     add_item "$name" "pm2" "$status" "$detail"
-  done
+    done
+  else
+    add_item "pm2" "pm2" "warning" "pm2 jlist did not return JSON"
+  fi
 fi
 
 if command -v docker >/dev/null 2>&1; then

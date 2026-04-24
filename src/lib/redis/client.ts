@@ -8,6 +8,7 @@
 import { Queue } from 'bullmq';
 import Redis, { type RedisOptions } from 'ioredis';
 import { discoverQueuesWithScan } from './discoverQueues';
+import { getQueueWorkerState, type QueueWorkerState } from './workerState';
 import { metrics, recordBullmqOp } from '@/lib/server/metrics';
 
 // Singleton Redis connection
@@ -28,6 +29,8 @@ export interface QueueStats {
   paused: number;
   isPaused?: boolean;
   workerActive: boolean;
+  workerState: QueueWorkerState;
+  workerStateReason?: string;
   workerLastSeen?: number; // TTL in seconds, indicates how recently worker checked in
   workerCount?: number;
   workerHeartbeatMaxAgeSec?: number;
@@ -181,7 +184,6 @@ export async function discoverQueues(): Promise<string[]> {
 // Key prefix for tracking consecutive failure count
 const WORKER_FAIL_COUNT_PREFIX = 'infra:worker-fails:';
 const WORKER_FAIL_COUNT_TTL = 300; // 5 minutes - enough to span multiple checks
-const CONSECUTIVE_FAILURES_REQUIRED = 5; // Must fail 5 checks in a row to be considered down
 const QUEUE_RATE_KEY_PREFIX = 'infra:queue-rate:';
 const QUEUE_RATE_TTL = 300; // Keep last snapshot for 5 minutes
 const MIN_RATE_SAMPLE_SECONDS = 15;
@@ -307,9 +309,12 @@ export async function getQueueStats(queueName: string): Promise<QueueStats> {
       await client.del(failCountKey);
     }
 
-    // Worker is only considered DOWN after N consecutive failures
-    // This prevents false positives from timing issues with the 30s TTL refresh
-    const workerActive = newFailCount < CONSECUTIVE_FAILURES_REQUIRED;
+    const workerState = getQueueWorkerState({
+      waiting,
+      active,
+      workerResponding: currentlyResponding,
+      failCount: newFailCount,
+    });
 
     // Oldest waiting job age
     let oldestWaitingAgeSec: number | undefined;
@@ -355,7 +360,7 @@ export async function getQueueStats(queueName: string): Promise<QueueStats> {
       delayed,
       paused,
       isPaused: pausedFlag === 1,
-      workerActive,
+      ...workerState,
       workerLastSeen: currentlyResponding ? workerTtl : undefined,
       oldestWaitingAgeSec,
       jobsPerMin,
@@ -383,7 +388,9 @@ export async function getAllQueueStats(): Promise<QueueStats[]> {
       if (!heartbeat) return queueStat;
       return {
         ...queueStat,
-        workerActive: heartbeat.count > 0,
+        workerActive: true,
+        workerState: 'active',
+        workerStateReason: `${heartbeat.count} worker heartbeat${heartbeat.count === 1 ? '' : 's'} present`,
         workerCount: heartbeat.count,
         workerHeartbeatMaxAgeSec: heartbeat.maxAgeSec,
       };

@@ -96,7 +96,7 @@ export default function OverviewPage() {
     const queues = sseData.queues || [];
     const totalFailed = queues.reduce((sum, q) => sum + (q.failed || 0), 0);
     const workersDown = queues.filter((q) =>
-      q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
+      q.workerState ? q.workerState === 'down' : q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
     ).length;
 
     const recentDeployments: CoolifyDeployment[] = (deploymentsData.recent || []).slice(0, 3).map((d: DeploymentRecordClient) => ({
@@ -240,8 +240,8 @@ export default function OverviewPage() {
         ) || 0;
 
         const workersDown = bullmqData.queues?.filter(
-          (q: { workerActive?: boolean; workerCount?: number }) =>
-            q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
+          (q: { workerActive?: boolean; workerCount?: number; workerState?: 'active' | 'idle' | 'down' | 'unknown' }) =>
+            q.workerState ? q.workerState === 'down' : q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
         ).length || 0;
 
         // Convert recent deployments to CoolifyDeployment format
