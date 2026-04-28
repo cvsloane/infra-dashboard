@@ -37,6 +37,26 @@ export interface DeploymentStats {
   failedToday: number;
 }
 
+export interface CoolifyBuildServer {
+  id: number;
+  name: string;
+  description: string | null;
+  ip: string;
+  isBuildServer: boolean;
+  concurrentBuilds: number;
+  deploymentQueueLimit: number;
+}
+
+export interface CoolifyBuildTopology {
+  servers: CoolifyBuildServer[];
+  primaryBuilder: CoolifyBuildServer | null;
+  fallbackBuilder: CoolifyBuildServer | null;
+  registryHost: string;
+  registryUrl: string;
+  deploymentWorkersMin: number;
+  deploymentWorkersMax: number;
+}
+
 /**
  * Get active deployments (queued or in_progress) with logs for progress tracking
  */
@@ -218,21 +238,66 @@ export async function getDeploymentStats(): Promise<DeploymentStats> {
   };
 }
 
+export async function getBuildTopology(): Promise<CoolifyBuildTopology> {
+  const query = `
+    SELECT
+      s.id,
+      s.name,
+      s.description,
+      s.ip,
+      COALESCE(ss.is_build_server, false) as "isBuildServer",
+      COALESCE(ss.concurrent_builds, 0) as "concurrentBuilds",
+      COALESCE(ss.deployment_queue_limit, 0) as "deploymentQueueLimit"
+    FROM servers s
+    LEFT JOIN server_settings ss ON ss.server_id = s.id
+    ORDER BY s.id
+  `;
+
+  const result = await pool.query(query);
+  const servers: CoolifyBuildServer[] = result.rows.map((row) => ({
+    id: Number(row.id),
+    name: row.name,
+    description: row.description,
+    ip: row.ip,
+    isBuildServer: Boolean(row.isBuildServer),
+    concurrentBuilds: Number(row.concurrentBuilds) || 0,
+    deploymentQueueLimit: Number(row.deploymentQueueLimit) || 0,
+  }));
+
+  const primaryBuilder = servers.find((server) => server.isBuildServer) || null;
+  const fallbackBuilder =
+    servers.find((server) => server.name === 'apps-vps') ||
+    servers.find((server) => server.name === 'localhost') ||
+    null;
+
+  return {
+    servers,
+    primaryBuilder,
+    fallbackBuilder,
+    registryHost: process.env.COOLIFY_REGISTRY_HOST || 'apps-vps',
+    registryUrl: process.env.COOLIFY_REGISTRY_URL || 'apps-vps.tail0e7402.ts.net:5443',
+    deploymentWorkersMin: Number(process.env.COOLIFY_DEPLOYMENT_WORKERS_MIN) || 0,
+    deploymentWorkersMax: Number(process.env.COOLIFY_DEPLOYMENT_WORKERS_MAX) || 0,
+  };
+}
+
 /**
  * Get all live deployment data (active + recent + stats)
  */
 export async function getLiveDeployments() {
   try {
-    const [active, recent, stats] = await Promise.all([
+    const [active, recent, stats, buildTopology] = await Promise.all([
       getActiveDeployments(),
       getRecentDeployments(30),
       getDeploymentStats(),
+      getBuildTopology(),
     ]);
 
     return {
       active,
       recent,
       stats,
+      buildTopology,
     };
   } catch (error) {
     console.error('Failed to fetch live deployments:', error);
@@ -240,6 +305,7 @@ export async function getLiveDeployments() {
       active: [],
       recent: [],
       stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 },
+      buildTopology: null,
     };
   }
 }

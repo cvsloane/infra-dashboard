@@ -92,6 +92,32 @@ cat /data/coolify/.env | grep POSTGRES
 
 ---
 
+### `COOLIFY_DEPLOYMENT_WORKERS_MIN` / `COOLIFY_DEPLOYMENT_WORKERS_MAX`
+
+**Optional** — Operator-facing Coolify deployment worker pool size shown on the Coolify page.
+
+```bash
+COOLIFY_DEPLOYMENT_WORKERS_MIN=6
+COOLIFY_DEPLOYMENT_WORKERS_MAX=6
+```
+
+The dashboard reads build-server membership and `concurrent_builds` directly from Coolify's database, but Coolify's Horizon worker process count lives in the Coolify container environment. Set these dashboard variables to match the live Coolify `HORIZON_MAX_PROCESSES` / deployment worker configuration so the UI reflects the actual deployment queue capacity.
+
+---
+
+### `COOLIFY_REGISTRY_HOST` / `COOLIFY_REGISTRY_URL`
+
+**Optional** — Operator-facing internal build registry location.
+
+```bash
+COOLIFY_REGISTRY_HOST=apps-vps
+COOLIFY_REGISTRY_URL=apps-vps.tail0e7402.ts.net:5443
+```
+
+Use these to make the build topology explicit: for the Heaviside setup, `homelinux` is the preferred builder, `apps-vps` remains runtime/fallback, and the internal image registry is still hosted on `apps-vps`.
+
+---
+
 ## Prometheus Metrics
 
 ### `PROMETHEUS_URL`

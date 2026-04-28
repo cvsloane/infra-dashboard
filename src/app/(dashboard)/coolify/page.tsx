@@ -9,9 +9,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Cpu, Database, Server } from 'lucide-react';
 import type { CoolifyApplication, CoolifyDeployment } from '@/types';
-import type { DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
+import type { CoolifyBuildTopologyClient, DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
 import { useDashboard } from '../layout';
 
 export default function CoolifyPage() {
@@ -20,6 +20,7 @@ export default function CoolifyPage() {
   const [activeDeployments, setActiveDeployments] = useState<DeploymentRecordClient[]>([]);
   const [recentDeployments, setRecentDeployments] = useState<DeploymentRecordClient[]>([]);
   const [stats, setStats] = useState<DeploymentStatsClient>({ queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 });
+  const [buildTopology, setBuildTopology] = useState<CoolifyBuildTopologyClient | null>(null);
   const [loading, setLoading] = useState(true);
 
   // All History tab state
@@ -52,6 +53,7 @@ export default function CoolifyPage() {
       setActiveDeployments(deploysData.active || []);
       setRecentDeployments(deploysData.recent || []);
       setStats(deploysData.stats || { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 });
+      setBuildTopology(deploysData.buildTopology || null);
     } catch (error) {
       console.error('Failed to fetch deployments:', error);
     } finally {
@@ -117,6 +119,7 @@ export default function CoolifyPage() {
       setActiveDeployments(sseData.deployments.active || []);
       setRecentDeployments(sseData.deployments.recent || []);
       setStats(sseData.deployments.stats || { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 });
+      setBuildTopology(sseData.deployments.buildTopology || null);
       setLoading(false);
     }
   }, [sseData]);
@@ -206,6 +209,43 @@ export default function CoolifyPage() {
           )}
         </div>
       </div>
+
+      {buildTopology && (
+        <Card>
+          <CardContent className="grid gap-4 pt-4 md:grid-cols-3">
+            <div className="flex items-start gap-3">
+              <Cpu className="mt-0.5 h-4 w-4 text-blue-600" />
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Primary builder</div>
+                <div className="font-medium">{buildTopology.primaryBuilder?.name || 'Not configured'}</div>
+                <div className="text-sm text-muted-foreground">
+                  {buildTopology.primaryBuilder
+                    ? `${buildTopology.primaryBuilder.concurrentBuilds} concurrent builds`
+                    : 'No build-server flag set'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Server className="mt-0.5 h-4 w-4 text-slate-600" />
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Runtime / fallback</div>
+                <div className="font-medium">{buildTopology.fallbackBuilder?.name || 'Not configured'}</div>
+                <div className="text-sm text-muted-foreground">
+                  Coolify workers {buildTopology.deploymentWorkersMin}-{buildTopology.deploymentWorkersMax}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Database className="mt-0.5 h-4 w-4 text-emerald-600" />
+              <div>
+                <div className="text-xs uppercase text-muted-foreground">Build registry</div>
+                <div className="font-medium">{buildTopology.registryHost}</div>
+                <div className="text-sm text-muted-foreground">{buildTopology.registryUrl}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Active deployments section */}
       {activeDeployments.length > 0 && (

@@ -36,6 +36,26 @@ export interface DeploymentStatsClient {
   failedToday: number;
 }
 
+export interface CoolifyBuildServerClient {
+  id: number;
+  name: string;
+  description: string | null;
+  ip: string;
+  isBuildServer: boolean;
+  concurrentBuilds: number;
+  deploymentQueueLimit: number;
+}
+
+export interface CoolifyBuildTopologyClient {
+  servers: CoolifyBuildServerClient[];
+  primaryBuilder: CoolifyBuildServerClient | null;
+  fallbackBuilder: CoolifyBuildServerClient | null;
+  registryHost: string;
+  registryUrl: string;
+  deploymentWorkersMin: number;
+  deploymentWorkersMax: number;
+}
+
 export interface DeploymentPage {
   deployments: DeploymentRecordClient[];
   nextCursor: string | null;

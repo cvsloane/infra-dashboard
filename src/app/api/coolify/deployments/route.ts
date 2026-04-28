@@ -28,19 +28,20 @@ export async function GET(request: Request) {
   try {
     // If view=all, fetch paginated all deployments
     if (view === 'all') {
-      const { active, recent, stats } = await getLiveDeployments();
+      const { active, recent, stats, buildTopology } = await getLiveDeployments();
       const allData = await getAllDeployments(cursor, limit, filters);
 
       return NextResponse.json({
         active,
         recent,
         stats,
+        buildTopology,
         all: allData,
       });
     }
 
     // Default behavior: fetch live deployments only (backwards compatible)
-    const { active, recent, stats } = await getLiveDeployments();
+    const { active, recent, stats, buildTopology } = await getLiveDeployments();
 
     // Transform to expected format for backwards compatibility
     const deployments = [...active, ...recent].map(d => ({
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
       active,
       recent,
       stats,
+      buildTopology,
     });
   } catch (error) {
     console.error('Failed to fetch deployments:', error);

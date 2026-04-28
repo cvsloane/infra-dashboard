@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
+import type { CoolifyBuildTopologyClient, DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
 import type { HermesOverviewSummary } from '@/types/hermes';
 
 interface SSEOptions {
@@ -154,6 +154,7 @@ export interface DashboardUpdate {
     active: DeploymentRecordClient[];
     recent: DeploymentRecordClient[];
     stats: DeploymentStatsClient;
+    buildTopology: CoolifyBuildTopologyClient | null;
   };
   postgres?: {
     up: boolean;
