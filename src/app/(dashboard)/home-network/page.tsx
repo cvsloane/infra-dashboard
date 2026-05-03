@@ -100,6 +100,9 @@ export default function HomeNetworkPage() {
             <div className="space-y-6">
               <DnsPolicyPanel dns={snapshot.dns} />
               <WarningsPanel warnings={data.computed_warnings} />
+              {data.computed_monitoring_warnings && data.computed_monitoring_warnings.length > 0 ? (
+                <WarningsPanel title="Monitoring Notes" warnings={data.computed_monitoring_warnings} />
+              ) : null}
             </div>
           </div>
         </>

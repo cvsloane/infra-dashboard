@@ -146,6 +146,7 @@ export interface HomeNetworkSnapshot {
   client_summary?: HomeNetworkClientSummary;
   dns: HomeNetworkDnsStatus;
   warnings: string[];
+  monitoring_warnings?: string[];
   config_summaries?: HomeNetworkConfigSummary[];
 }
 
@@ -171,4 +172,5 @@ export interface HomeNetworkReadResponse {
   age_sec: number | null;
   max_age_sec: number;
   computed_warnings: string[];
+  computed_monitoring_warnings?: string[];
 }

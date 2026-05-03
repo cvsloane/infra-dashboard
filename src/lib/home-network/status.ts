@@ -112,7 +112,7 @@ export function buildHomeNetworkReadResponse(
 ): HomeNetworkReadResponse {
   const maxAgeSec = getHomeNetworkMaxAgeSec();
   const ageSec = Math.max(0, Math.floor((now - Date.parse(snapshot.collected_at)) / 1000));
-  const { status, warnings } = computeHomeNetworkStatus(snapshot, ageSec, maxAgeSec);
+  const { status, warnings, monitoringWarnings } = computeHomeNetworkStatus(snapshot, ageSec, maxAgeSec);
   return {
     status,
     message: statusMessage(status, ageSec, warnings),
@@ -122,6 +122,7 @@ export function buildHomeNetworkReadResponse(
     age_sec: ageSec,
     max_age_sec: maxAgeSec,
     computed_warnings: warnings,
+    computed_monitoring_warnings: monitoringWarnings,
   };
 }
 
@@ -129,9 +130,23 @@ export function computeHomeNetworkStatus(
   snapshot: HomeNetworkSnapshot,
   ageSec: number,
   maxAgeSec = getHomeNetworkMaxAgeSec(),
-): { status: HomeNetworkStatus; warnings: string[] } {
-  const warnings = new Set<string>(snapshot.warnings || []);
-  let status: HomeNetworkStatus = snapshot.status === 'error' ? 'error' : snapshot.status === 'warning' ? 'warning' : 'ok';
+): { status: HomeNetworkStatus; warnings: string[]; monitoringWarnings: string[] } {
+  const snapshotWarnings = snapshot.warnings || [];
+  const monitoringWarnings = new Set<string>(snapshot.monitoring_warnings || []);
+  const healthWarnings = snapshotWarnings.filter((warning) => {
+    if (isSecondarySyslogWarning(warning) && hasRouterEventSummaries(snapshot)) {
+      monitoringWarnings.add(warning);
+      return false;
+    }
+    return true;
+  });
+  const warnings = new Set<string>(healthWarnings);
+  let status: HomeNetworkStatus =
+    snapshot.status === 'error'
+      ? 'error'
+      : snapshot.status === 'warning' && healthWarnings.length > 0
+        ? 'warning'
+        : 'ok';
 
   if (ageSec > maxAgeSec) {
     warnings.add(`Snapshot is stale: ${ageSec}s old`);
@@ -184,7 +199,7 @@ export function computeHomeNetworkStatus(
     }
   }
 
-  return { status, warnings: [...warnings] };
+  return { status, warnings: [...warnings], monitoringWarnings: [...monitoringWarnings] };
 }
 
 export function makeHomeNetworkHistoryEntry(snapshot: HomeNetworkSnapshot): HomeNetworkHistoryEntry {
@@ -200,6 +215,14 @@ export function makeHomeNetworkHistoryEntry(snapshot: HomeNetworkSnapshot): Home
     multi_ap_mac_count: snapshot.client_summary?.multi_ap_mac_count,
     duplicate_hostname_count: snapshot.client_summary?.duplicate_hostname_count,
   };
+}
+
+function isSecondarySyslogWarning(warning: string): boolean {
+  return /^flint-[\w-]+\.log is (stale|missing)/.test(warning);
+}
+
+function hasRouterEventSummaries(snapshot: HomeNetworkSnapshot): boolean {
+  return snapshot.routers.every((router) => (router.event_summary?.sample_size ?? 0) > 0);
 }
 
 function statusMessage(status: HomeNetworkStatus, ageSec: number, warnings: string[]): string {

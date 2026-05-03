@@ -89,6 +89,41 @@ describe('home-network health semantics', () => {
     expect(response.computed_warnings[0]).toContain('stale');
   });
 
+  it('treats stale pushed syslog as a monitoring note when SSH event summaries are present', () => {
+    const snapshot: HomeNetworkSnapshot = {
+      ...baseSnapshot,
+      status: 'warning',
+      warnings: [
+        'flint-cabinet.log is stale: 373s old',
+        'flint-office.log is stale: 373s old',
+        'flint-school.log is stale: 373s old',
+      ],
+      routers: baseSnapshot.routers.map((router) => ({
+        ...router,
+        event_summary: { sample_size: 80 },
+      })),
+    };
+
+    const response = buildHomeNetworkReadResponse(snapshot, [], Date.parse('2026-05-02T20:00:30.000Z'));
+
+    expect(response.status).toBe('ok');
+    expect(response.computed_warnings).toEqual([]);
+    expect(response.computed_monitoring_warnings).toHaveLength(3);
+  });
+
+  it('keeps stale pushed syslog as a health warning when SSH event summaries are absent', () => {
+    const snapshot: HomeNetworkSnapshot = {
+      ...baseSnapshot,
+      status: 'warning',
+      warnings: ['flint-cabinet.log is stale: 373s old'],
+    };
+
+    const response = buildHomeNetworkReadResponse(snapshot, [], Date.parse('2026-05-02T20:00:30.000Z'));
+
+    expect(response.status).toBe('warning');
+    expect(response.computed_warnings[0]).toContain('flint-cabinet.log is stale');
+  });
+
   it('marks unreachable routers and NextDNS failures as errors', () => {
     const snapshot: HomeNetworkSnapshot = {
       ...baseSnapshot,

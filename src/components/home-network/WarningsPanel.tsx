@@ -2,14 +2,15 @@ import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface WarningsPanelProps {
+  title?: string;
   warnings: string[];
 }
 
-export function WarningsPanel({ warnings }: WarningsPanelProps) {
+export function WarningsPanel({ title = 'Warnings', warnings }: WarningsPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Warnings</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
         {warnings.length === 0 ? (

@@ -111,7 +111,8 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     router_rows: list[dict[str, Any]] = []
     clients: list[dict[str, Any]] = []
     dns_rows: list[dict[str, Any]] = []
-    warnings: list[str] = check_syslog_freshness(now)
+    warnings: list[str] = []
+    monitoring_warnings: list[str] = check_syslog_freshness(now)
 
     with ThreadPoolExecutor(max_workers=min(len(routers), 6)) as executor:
         futures = [executor.submit(collect_router, router) for router in routers]
@@ -140,6 +141,7 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
             "routers": dns_rows,
         },
         "warnings": sorted(set(warnings)),
+        "monitoring_warnings": sorted(set(monitoring_warnings)),
     }
 
 
