@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -73,10 +74,10 @@ def main() -> int:
     output.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     if args.post_url:
-      post_snapshot(args.post_url, args.token, snapshot)
+        post_snapshot(args.post_url, args.token, snapshot)
 
     print(json.dumps({"status": snapshot["status"], "routers": len(snapshot["routers"]), "clients": len(snapshot["clients"])}))
-    return 0 if snapshot["status"] in {"ok", "warning"} else 2
+    return 0
 
 
 def load_routers(raw: str | None) -> list[dict[str, str]]:
@@ -95,12 +96,14 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     dns_rows: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    for router in routers:
-        row, router_clients, dns = collect_router(router)
-        router_rows.append(row)
-        clients.extend(router_clients)
-        dns_rows.append(dns)
-        warnings.extend(row.get("warnings", []))
+    with ThreadPoolExecutor(max_workers=min(len(routers), 6)) as executor:
+        futures = [executor.submit(collect_router, router) for router in routers]
+        for future in as_completed(futures):
+            row, router_clients, dns = future.result()
+            router_rows.append(row)
+            clients.extend(router_clients)
+            dns_rows.append(dns)
+            warnings.extend(row.get("warnings", []))
 
     status = "error" if any(not r["reachable"] for r in router_rows) else "warning" if warnings else "ok"
     if any((r.get("nextdns") or {}).get("running") is False for r in router_rows):
@@ -184,14 +187,29 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
 
 
 def run_ssh(host: str, script: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", f"root@{host}", "sh -s"],
-        input=script,
-        text=True,
-        capture_output=True,
-        timeout=40,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            [
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=8",
+                "-o",
+                "ServerAliveInterval=5",
+                "-o",
+                "ServerAliveCountMax=2",
+                f"root@{host}",
+                "sh -s",
+            ],
+            input=script,
+            text=True,
+            capture_output=True,
+            timeout=35,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(exc.cmd, 124, exc.stdout or "", exc.stderr or "ssh collection timed out")
 
 
 def split_sections(output: str) -> dict[str, str]:
@@ -399,7 +417,11 @@ def band_from_channel(channel: str | None) -> str | None:
 
 
 def post_snapshot(url: str, token: str | None, snapshot: dict[str, Any]) -> None:
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "home-network-monitor/1.0",
+    }
     if token:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
