@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect home network telemetry
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/home-network-monitor/home-network.env
+ExecStart=/opt/home-network-monitor/collect-home-network.py --once --output /var/lib/home-network-monitor/latest.json
+User=cvsloane
+Group=cvsloane

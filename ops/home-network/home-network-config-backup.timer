@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Flint router configs daily
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+Unit=home-network-config-backup.service
+
+[Install]
+WantedBy=timers.target

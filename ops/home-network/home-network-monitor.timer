@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect home network telemetry every minute
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=60
+AccuracySec=5
+Persistent=true
+Unit=home-network-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Flint router configs privately
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/home-network-monitor/backup-home-network-configs.py
+User=cvsloane
+Group=cvsloane
