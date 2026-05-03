@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildHomeNetworkReadResponse,
   computeHomeNetworkStatus,
+  makeHomeNetworkHistoryEntry,
   validateHomeNetworkSnapshot,
   validateSnapshotFreshForIngest,
 } from '@/lib/home-network/status';
@@ -113,5 +114,35 @@ describe('home-network health semantics', () => {
     const result = computeHomeNetworkStatus(snapshot, 20, 180);
     expect(result.status).toBe('error');
     expect(result.warnings.join(' ')).toContain('uplink is down');
+  });
+});
+
+describe('home-network history entries', () => {
+  it('preserves client stability counters for trend analysis', () => {
+    const snapshot: HomeNetworkSnapshot = {
+      ...baseSnapshot,
+      clients: [
+        { mac: 'aa:aa:aa:aa:aa:aa', signal_dbm: -72 },
+        { mac: 'bb:bb:bb:bb:bb:bb', signal_dbm: -78 },
+      ],
+      client_summary: {
+        total: 2,
+        home_k: 1,
+        weak_signal: 2,
+        very_weak_signal: 1,
+        unknown_hostname: 0,
+        multi_ap_mac_count: 1,
+        duplicate_hostname_count: 1,
+        weakest: [],
+      },
+    };
+
+    const entry = makeHomeNetworkHistoryEntry(snapshot);
+
+    expect(entry.client_count).toBe(2);
+    expect(entry.weak_signal_count).toBe(2);
+    expect(entry.very_weak_signal_count).toBe(1);
+    expect(entry.multi_ap_mac_count).toBe(1);
+    expect(entry.duplicate_hostname_count).toBe(1);
   });
 });

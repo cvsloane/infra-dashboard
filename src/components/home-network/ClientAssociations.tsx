@@ -60,8 +60,14 @@ export function ClientAssociations({ clients }: ClientAssociationsProps) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((client) => (
-              <tr key={`${client.mac}-${client.router_hostname}-${client.bssid}`} className="border-b last:border-0">
+            {filtered.map((client) => {
+              const weakSignal = client.signal_dbm !== undefined && client.signal_dbm <= -70;
+              const veryWeakSignal = client.signal_dbm !== undefined && client.signal_dbm <= -75;
+              return (
+              <tr
+                key={`${client.mac}-${client.router_hostname}-${client.bssid}`}
+                className={`border-b last:border-0 ${veryWeakSignal ? 'bg-yellow-500/10' : weakSignal ? 'bg-muted/30' : ''}`}
+              >
                 <td className="py-3 pr-4">
                   <div className="font-medium">{client.hostname || 'Unknown'}</div>
                   <div className="font-mono text-xs text-muted-foreground">{client.mac}</div>
@@ -76,7 +82,8 @@ export function ClientAssociations({ clients }: ClientAssociationsProps) {
                 </td>
                 <td className="py-3 pr-4 font-mono text-xs">{client.bssid || '—'}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No clients match.</p>}

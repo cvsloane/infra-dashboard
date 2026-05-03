@@ -11,6 +11,10 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
   const snapshot = data.snapshot;
   const routerCount = snapshot?.routers.length ?? 0;
   const clientCount = snapshot?.clients.length ?? 0;
+  const weakClientCount = snapshot?.client_summary?.weak_signal ?? 0;
+  const veryWeakClientCount = snapshot?.client_summary?.very_weak_signal ?? 0;
+  const multiApMacCount = snapshot?.client_summary?.multi_ap_mac_count ?? 0;
+  const duplicateHostnameCount = snapshot?.client_summary?.duplicate_hostname_count ?? 0;
   const radioCount = snapshot?.routers.reduce((sum, router) => sum + (router.radios?.length ?? 0), 0) ?? 0;
   const warningCount = data.computed_warnings.length;
 
@@ -39,9 +43,9 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
     {
       label: 'Clients',
       value: `${clientCount}`,
-      detail: `${radioCount} radios observed`,
+      detail: `${weakClientCount} weak, ${veryWeakClientCount} very weak, ${multiApMacCount} multi-AP, ${duplicateHostnameCount} duplicate names`,
       icon: Users,
-      className: 'border-border bg-card',
+      className: veryWeakClientCount > 0 ? statusClassName('warning') : 'border-border bg-card',
     },
     {
       label: 'Warnings',

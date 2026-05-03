@@ -187,6 +187,21 @@ export function computeHomeNetworkStatus(
   return { status, warnings: [...warnings] };
 }
 
+export function makeHomeNetworkHistoryEntry(snapshot: HomeNetworkSnapshot): HomeNetworkHistoryEntry {
+  return {
+    collected_at: snapshot.collected_at,
+    status: snapshot.status,
+    router_count: snapshot.routers.length,
+    client_count: snapshot.clients.length,
+    warning_count: snapshot.warnings.length,
+    unreachable_router_count: snapshot.routers.filter((router) => !router.reachable).length,
+    weak_signal_count: snapshot.client_summary?.weak_signal,
+    very_weak_signal_count: snapshot.client_summary?.very_weak_signal,
+    multi_ap_mac_count: snapshot.client_summary?.multi_ap_mac_count,
+    duplicate_hostname_count: snapshot.client_summary?.duplicate_hostname_count,
+  };
+}
+
 function statusMessage(status: HomeNetworkStatus, ageSec: number, warnings: string[]): string {
   if (status === 'unknown') return 'No snapshot data';
   if (status === 'error') return warnings[0] || 'Home network needs attention';

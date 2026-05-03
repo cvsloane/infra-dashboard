@@ -66,6 +66,48 @@ export interface HomeNetworkDnsStatus {
   routers: HomeNetworkDnsRouterStatus[];
 }
 
+export interface HomeNetworkWeakClient {
+  hostname?: string;
+  mac?: string;
+  router_hostname?: string;
+  ssid?: string;
+  band?: string;
+  signal_dbm?: number;
+}
+
+export interface HomeNetworkClientSummary {
+  total: number;
+  home_k: number;
+  weak_signal: number;
+  very_weak_signal: number;
+  unknown_hostname: number;
+  multi_ap_mac_count?: number;
+  duplicate_hostname_count?: number;
+  multi_ap_macs?: Array<{
+    mac: string;
+    hostname?: string;
+    routers: string[];
+    bssids: string[];
+    signals: number[];
+  }>;
+  duplicate_hostnames?: Array<{
+    hostname: string;
+    macs: string[];
+    routers: string[];
+  }>;
+  weakest: HomeNetworkWeakClient[];
+}
+
+export interface HomeNetworkRouterEventSummary {
+  sample_size: number;
+  associations?: number;
+  disassociations?: number;
+  deauthentications?: number;
+  excessive_retries?: number;
+  nextdns_reconnects?: number;
+  dhcp_events?: number;
+}
+
 export interface HomeNetworkRouter {
   hostname: string;
   role: 'main' | 'office' | 'school' | string;
@@ -79,6 +121,7 @@ export interface HomeNetworkRouter {
   kids?: HomeNetworkInterfaceStatus;
   internet_ping?: HomeNetworkPingResult;
   nextdns?: HomeNetworkDnsRouterStatus;
+  event_summary?: HomeNetworkRouterEventSummary;
   radios?: HomeNetworkRadio[];
   warnings?: string[];
 }
@@ -100,6 +143,7 @@ export interface HomeNetworkSnapshot {
   status: HomeNetworkStatus;
   routers: HomeNetworkRouter[];
   clients: HomeNetworkClient[];
+  client_summary?: HomeNetworkClientSummary;
   dns: HomeNetworkDnsStatus;
   warnings: string[];
   config_summaries?: HomeNetworkConfigSummary[];
@@ -112,6 +156,10 @@ export interface HomeNetworkHistoryEntry {
   client_count: number;
   warning_count: number;
   unreachable_router_count: number;
+  weak_signal_count?: number;
+  very_weak_signal_count?: number;
+  multi_ap_mac_count?: number;
+  duplicate_hostname_count?: number;
 }
 
 export interface HomeNetworkReadResponse {

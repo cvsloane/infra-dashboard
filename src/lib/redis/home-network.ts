@@ -3,6 +3,7 @@ import {
   buildHomeNetworkReadResponse,
   getHomeNetworkHistoryLimit,
   getHomeNetworkMaxAgeSec,
+  makeHomeNetworkHistoryEntry,
   validateHomeNetworkSnapshot,
   validateSnapshotFreshForIngest,
 } from '@/lib/home-network/status';
@@ -18,6 +19,7 @@ export {
   getHomeNetworkHistoryLimit,
   getHomeNetworkIngestRejectAgeSec,
   getHomeNetworkMaxAgeSec,
+  makeHomeNetworkHistoryEntry,
   validateHomeNetworkSnapshot,
   validateSnapshotFreshForIngest,
 } from '@/lib/home-network/status';
@@ -28,7 +30,7 @@ export const HOME_NETWORK_LAST_COLLECTED_KEY = 'home-network:meta:last-collected
 
 export async function storeHomeNetworkSnapshot(snapshot: HomeNetworkSnapshot): Promise<HomeNetworkHistoryEntry> {
   const client = getRedis();
-  const historyEntry = makeHistoryEntry(snapshot);
+  const historyEntry = makeHomeNetworkHistoryEntry(snapshot);
   const pipeline = client.pipeline();
   pipeline.set(HOME_NETWORK_LATEST_KEY, JSON.stringify(snapshot));
   pipeline.set(HOME_NETWORK_LAST_COLLECTED_KEY, snapshot.collected_at);
@@ -92,16 +94,5 @@ function invalidStoredSnapshotResponse(
     age_sec: null,
     max_age_sec: getHomeNetworkMaxAgeSec(),
     computed_warnings: [message],
-  };
-}
-
-function makeHistoryEntry(snapshot: HomeNetworkSnapshot): HomeNetworkHistoryEntry {
-  return {
-    collected_at: snapshot.collected_at,
-    status: snapshot.status,
-    router_count: snapshot.routers.length,
-    client_count: snapshot.clients.length,
-    warning_count: snapshot.warnings.length,
-    unreachable_router_count: snapshot.routers.filter((router) => !router.reachable).length,
   };
 }

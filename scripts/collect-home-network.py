@@ -21,6 +21,20 @@ ROUTERS = [
     {"role": "office", "hostname": "flint-office", "ip": "192.168.8.113"},
     {"role": "school", "hostname": "flint-school", "ip": "192.168.8.246"},
 ]
+BASELINE_NEXTDNS_PROFILE = "23b61e"
+KIDS_NEXTDNS_PROFILE = "43d9e6"
+EXPECTED_KIDS_SUBNETS = {
+    "flint-cabinet": "192.168.108.0/24",
+    "flint-office": "192.168.110.0/24",
+    "flint-school": "192.168.109.0/24",
+}
+
+SYSLOG_FILES = [
+    Path("/var/log/home-network/flint-cabinet.log"),
+    Path("/var/log/home-network/flint-office.log"),
+    Path("/var/log/home-network/flint-school.log"),
+]
+DEFAULT_SYSLOG_MAX_AGE_SEC = 300
 
 REMOTE_SCRIPT = r"""
 echo __SECTION__:hostname
@@ -55,6 +69,8 @@ for dev in $(iwinfo 2>/dev/null | awk '/ESSID:/ {print $1}'); do
 done
 echo __SECTION__:internet_ping
 ping -c 3 -W 2 1.1.1.1 2>/dev/null || true
+echo __SECTION__:logread_tail
+logread | tail -n 80 2>/dev/null || true
 """
 
 
@@ -90,11 +106,12 @@ def load_routers(raw: str | None) -> list[dict[str, str]]:
 
 
 def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
-    collected_at = dt.datetime.now(dt.timezone.utc).astimezone().isoformat()
+    now = dt.datetime.now(dt.timezone.utc).astimezone()
+    collected_at = now.isoformat()
     router_rows: list[dict[str, Any]] = []
     clients: list[dict[str, Any]] = []
     dns_rows: list[dict[str, Any]] = []
-    warnings: list[str] = []
+    warnings: list[str] = check_syslog_freshness(now)
 
     with ThreadPoolExecutor(max_workers=min(len(routers), 6)) as executor:
         futures = [executor.submit(collect_router, router) for router in routers]
@@ -116,13 +133,41 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
         "status": status,
         "routers": router_rows,
         "clients": clients,
+        "client_summary": summarize_clients(clients),
         "dns": {
-            "baseline_profile": "23b61e",
-            "kids_profile": "43d9e6",
+            "baseline_profile": BASELINE_NEXTDNS_PROFILE,
+            "kids_profile": KIDS_NEXTDNS_PROFILE,
             "routers": dns_rows,
         },
         "warnings": sorted(set(warnings)),
     }
+
+
+def check_syslog_freshness(now: dt.datetime) -> list[str]:
+    if os.environ.get("HOME_NETWORK_CHECK_SYSLOG", "1").lower() in {"0", "false", "no"}:
+        return []
+
+    max_age = positive_int_from_env("HOME_NETWORK_SYSLOG_MAX_AGE_SEC", DEFAULT_SYSLOG_MAX_AGE_SEC)
+    warnings: list[str] = []
+    for path in SYSLOG_FILES:
+        if not path.exists():
+            warnings.append(f"{path.name} is missing")
+            continue
+        age_sec = int(now.timestamp() - path.stat().st_mtime)
+        if age_sec > max_age:
+            warnings.append(f"{path.name} is stale: {age_sec}s old")
+    return warnings
+
+
+def positive_int_from_env(name: str, fallback: int) -> int:
+    raw = os.environ.get(name)
+    if not raw:
+        return fallback
+    try:
+        value = int(raw)
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
 
 
 def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
@@ -151,12 +196,14 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
     kids = parse_ifstatus(section_text(sections, "ifstatus_kids"), "kids")
     nextdns = parse_nextdns(hostname, section_text(sections, "nextdns_status"), section_text(sections, "nextdns_config"))
     ping = parse_ping(section_text(sections, "internet_ping"))
+    event_summary = parse_logread_events(section_text(sections, "logread_tail"))
     radios, clients = parse_wifi_sections(hostname, role, sections)
     leases = parse_dhcp_leases(section_text(sections, "dhcp_leases"))
     merge_leases(clients, leases)
 
     if nextdns.get("running") is False:
         warnings.append(f"{hostname} NextDNS is down")
+    warnings.extend(validate_nextdns_policy(hostname, nextdns))
     if role in {"office", "school"} and wan.get("up") is False:
         warnings.append(f"{hostname} uplink is down")
     if ping.get("ok") is False:
@@ -180,6 +227,7 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
         "kids": kids,
         "internet_ping": ping,
         "nextdns": nextdns,
+        "event_summary": event_summary,
         "radios": radios,
         "warnings": warnings,
     }
@@ -268,12 +316,29 @@ def parse_nextdns(hostname: str, status_raw: str, config_raw: str) -> dict[str, 
     return {
         "router_hostname": hostname,
         "running": running,
-        "baseline_profile": "23b61e" if "23b61e" in combined else (ids[0] if ids else None),
-        "kids_profile": "43d9e6" if "43d9e6" in combined else None,
+        "baseline_profile": BASELINE_NEXTDNS_PROFILE if BASELINE_NEXTDNS_PROFILE in combined else (ids[0] if ids else None),
+        "kids_profile": KIDS_NEXTDNS_PROFILE if KIDS_NEXTDNS_PROFILE in combined else None,
         "conditional_profiles": conditional,
         "test_ok": running,
         "message": first_nonempty_line(status_raw),
     }
+
+
+def validate_nextdns_policy(hostname: str, nextdns: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    if nextdns.get("baseline_profile") != BASELINE_NEXTDNS_PROFILE:
+        warnings.append(f"{hostname} NextDNS baseline profile mismatch")
+    expected_subnet = EXPECTED_KIDS_SUBNETS.get(hostname)
+    if expected_subnet:
+        conditional_profiles = nextdns.get("conditional_profiles") or []
+        has_kids_mapping = any(
+            row.get("subnet") == expected_subnet and row.get("profile") == KIDS_NEXTDNS_PROFILE
+            for row in conditional_profiles
+            if isinstance(row, dict)
+        )
+        if not has_kids_mapping:
+            warnings.append(f"{hostname} missing Kids Strict NextDNS mapping for {expected_subnet}")
+    return warnings
 
 
 def parse_ping(raw: str) -> dict[str, Any]:
@@ -286,6 +351,128 @@ def parse_ping(raw: str) -> dict[str, Any]:
     if rtt_match:
         out.update({"avg_ms": float(rtt_match.group(2)), "max_ms": float(rtt_match.group(3))})
     return out
+
+
+def parse_logread_events(raw: str) -> dict[str, int]:
+    summary = {
+        "sample_size": 0,
+        "associations": 0,
+        "disassociations": 0,
+        "deauthentications": 0,
+        "excessive_retries": 0,
+        "nextdns_reconnects": 0,
+        "dhcp_events": 0,
+    }
+    for line in raw.splitlines():
+        normalized = line.lower()
+        if not normalized.strip():
+            continue
+        summary["sample_size"] += 1
+        if "associated" in normalized and "disassociated" not in normalized:
+            summary["associations"] += 1
+        if "disassociated" in normalized:
+            summary["disassociations"] += 1
+        if "deauthenticated" in normalized or "deauth" in normalized:
+            summary["deauthentications"] += 1
+        if "excessive retries" in normalized:
+            summary["excessive_retries"] += 1
+        if "nextdns" in normalized and "connected" in normalized:
+            summary["nextdns_reconnects"] += 1
+        if "dnsmasq-dhcp" in normalized or "dhcp" in normalized:
+            summary["dhcp_events"] += 1
+    return summary
+
+
+def summarize_clients(clients: list[dict[str, Any]]) -> dict[str, Any]:
+    weak_clients = [
+        client for client in clients
+        if isinstance(client.get("signal_dbm"), int) and client["signal_dbm"] <= -70
+    ]
+    very_weak_clients = [
+        client for client in clients
+        if isinstance(client.get("signal_dbm"), int) and client["signal_dbm"] <= -75
+    ]
+    home_k_clients = [client for client in clients if client.get("ssid") == "Home-K"]
+    unknown_clients = [
+        client for client in clients
+        if not client.get("hostname") or str(client.get("hostname")).strip().lower() in {"*", "unknown"}
+    ]
+    weak_sorted = sorted(
+        weak_clients,
+        key=lambda client: (client.get("signal_dbm") if isinstance(client.get("signal_dbm"), int) else 0),
+    )
+    multi_ap_macs = summarize_multi_ap_macs(clients)
+    duplicate_hostnames = summarize_duplicate_hostnames(clients)
+    return {
+        "total": len(clients),
+        "home_k": len(home_k_clients),
+        "weak_signal": len(weak_clients),
+        "very_weak_signal": len(very_weak_clients),
+        "unknown_hostname": len(unknown_clients),
+        "multi_ap_mac_count": len(multi_ap_macs),
+        "duplicate_hostname_count": len(duplicate_hostnames),
+        "multi_ap_macs": multi_ap_macs,
+        "duplicate_hostnames": duplicate_hostnames,
+        "weakest": [
+            {
+                "hostname": client.get("hostname") or "Unknown",
+                "mac": client.get("mac"),
+                "router_hostname": client.get("router_hostname"),
+                "ssid": client.get("ssid"),
+                "band": client.get("band"),
+                "signal_dbm": client.get("signal_dbm"),
+            }
+            for client in weak_sorted[:5]
+        ],
+    }
+
+
+def summarize_multi_ap_macs(clients: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_mac: dict[str, list[dict[str, Any]]] = {}
+    for client in clients:
+        mac = client.get("mac")
+        if not mac:
+            continue
+        by_mac.setdefault(str(mac), []).append(client)
+
+    out = []
+    for mac, rows in by_mac.items():
+        routers = sorted({str(row.get("router_hostname")) for row in rows if row.get("router_hostname")})
+        bssids = sorted({str(row.get("bssid")) for row in rows if row.get("bssid")})
+        if len(routers) < 2 and len(bssids) < 2:
+            continue
+        hostname = next((row.get("hostname") for row in rows if row.get("hostname")), "Unknown")
+        signals = [row.get("signal_dbm") for row in rows if isinstance(row.get("signal_dbm"), int)]
+        out.append({
+            "mac": mac,
+            "hostname": hostname,
+            "routers": routers,
+            "bssids": bssids,
+            "signals": signals,
+        })
+    return sorted(out, key=lambda row: str(row.get("hostname") or row.get("mac")))[:10]
+
+
+def summarize_duplicate_hostnames(clients: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for client in clients:
+        hostname = client.get("hostname")
+        if not hostname or str(hostname).strip().lower() in {"*", "unknown"}:
+            continue
+        by_name.setdefault(str(hostname), []).append(client)
+
+    out = []
+    for hostname, rows in by_name.items():
+        macs = sorted({str(row.get("mac")) for row in rows if row.get("mac")})
+        routers = sorted({str(row.get("router_hostname")) for row in rows if row.get("router_hostname")})
+        if len(macs) < 2:
+            continue
+        out.append({
+            "hostname": hostname,
+            "macs": macs,
+            "routers": routers,
+        })
+    return sorted(out, key=lambda row: str(row.get("hostname")))[:10]
 
 
 def parse_wifi_sections(hostname: str, role: str, sections: dict[str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

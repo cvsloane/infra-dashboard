@@ -24,6 +24,7 @@ export function RouterTable({ routers }: RouterTableProps) {
               <th className="py-2 pr-4 font-medium">WAN/uplink</th>
               <th className="py-2 pr-4 font-medium">Internet</th>
               <th className="py-2 pr-4 font-medium">NextDNS</th>
+              <th className="py-2 pr-4 font-medium">Recent events</th>
               <th className="py-2 pr-4 font-medium">Warnings</th>
             </tr>
           </thead>
@@ -54,6 +55,19 @@ export function RouterTable({ routers }: RouterTableProps) {
                   <td className="py-3 pr-4">
                     <div>{router.nextdns?.running === false ? 'Down' : router.nextdns?.running ? 'Running' : '—'}</div>
                     <div className="text-xs text-muted-foreground">{router.nextdns?.message || router.nextdns?.baseline_profile || ''}</div>
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-muted-foreground">
+                    {router.event_summary ? (
+                      <div className="space-y-1">
+                        <div>{router.event_summary.sample_size} log lines sampled</div>
+                        <div>
+                          assoc {router.event_summary.associations || 0} / disassoc {router.event_summary.disassociations || 0}
+                        </div>
+                        <div>
+                          retries {router.event_summary.excessive_retries || 0} / NextDNS {router.event_summary.nextdns_reconnects || 0}
+                        </div>
+                      </div>
+                    ) : '—'}
                   </td>
                   <td className="py-3 pr-4 text-xs text-muted-foreground">
                     {(router.warnings || []).length > 0 ? router.warnings?.join('; ') : '—'}
