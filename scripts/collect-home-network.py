@@ -29,12 +29,8 @@ EXPECTED_KIDS_SUBNETS = {
     "flint-school": "192.168.109.0/24",
 }
 
-SYSLOG_FILES = [
-    Path("/var/log/home-network/flint-cabinet.log"),
-    Path("/var/log/home-network/flint-office.log"),
-    Path("/var/log/home-network/flint-school.log"),
-]
-DEFAULT_SYSLOG_MAX_AGE_SEC = 300
+DEFAULT_ROUTER_LOG_DIR = Path("/var/lib/home-network-monitor/router-logs")
+DEFAULT_ROUTER_LOG_POLL_MAX_AGE_SEC = 300
 
 REMOTE_SCRIPT = r"""
 echo __SECTION__:hostname
@@ -113,7 +109,7 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     lease_sources: list[dict[str, dict[str, str]]] = []
     dns_rows: list[dict[str, Any]] = []
     warnings: list[str] = []
-    monitoring_warnings: list[str] = check_syslog_freshness(now)
+    monitoring_warnings: list[str] = []
 
     with ThreadPoolExecutor(max_workers=min(len(routers), 6)) as executor:
         futures = [executor.submit(collect_router, router) for router in routers]
@@ -126,6 +122,7 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
             warnings.extend(row.get("warnings", []))
 
     merge_leases(clients, merge_lease_sources(lease_sources))
+    monitoring_warnings.extend(check_router_log_poll_freshness(now, routers))
     status = "error" if any(not r["reachable"] for r in router_rows) else "warning" if warnings else "ok"
     if any((r.get("nextdns") or {}).get("running") is False for r in router_rows):
         status = "error"
@@ -206,19 +203,22 @@ def sanitize_windows_laptop(row: dict[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def check_syslog_freshness(now: dt.datetime) -> list[str]:
-    if os.environ.get("HOME_NETWORK_CHECK_SYSLOG", "1").lower() in {"0", "false", "no"}:
+def check_router_log_poll_freshness(now: dt.datetime, routers: list[dict[str, str]]) -> list[str]:
+    if os.environ.get("HOME_NETWORK_CHECK_ROUTER_LOG_POLL", "1").lower() in {"0", "false", "no"}:
         return []
 
-    max_age = positive_int_from_env("HOME_NETWORK_SYSLOG_MAX_AGE_SEC", DEFAULT_SYSLOG_MAX_AGE_SEC)
+    max_age = positive_int_from_env("HOME_NETWORK_ROUTER_LOG_POLL_MAX_AGE_SEC", DEFAULT_ROUTER_LOG_POLL_MAX_AGE_SEC)
+    log_dir = router_log_dir()
     warnings: list[str] = []
-    for path in SYSLOG_FILES:
+    for router in routers:
+        hostname = router.get("hostname", "unknown-router")
+        path = log_dir / f"{hostname}.last_poll"
         if not path.exists():
-            warnings.append(f"{path.name} is missing")
+            warnings.append(f"{hostname} router log poll is missing")
             continue
         age_sec = int(now.timestamp() - path.stat().st_mtime)
         if age_sec > max_age:
-            warnings.append(f"{path.name} is stale: {age_sec}s old")
+            warnings.append(f"{hostname} router log poll is stale: {age_sec}s old")
     return warnings
 
 
@@ -259,7 +259,9 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
     kids = parse_ifstatus(section_text(sections, "ifstatus_kids"), "kids")
     nextdns = parse_nextdns(hostname, section_text(sections, "nextdns_status"), section_text(sections, "nextdns_config"))
     ping = parse_ping(section_text(sections, "internet_ping"))
-    event_summary = parse_logread_events(section_text(sections, "logread_tail"))
+    logread_tail = section_text(sections, "logread_tail")
+    persist_router_log_tail(hostname, logread_tail)
+    event_summary = parse_logread_events(logread_tail)
     radios, clients = parse_wifi_sections(hostname, role, sections)
     leases = parse_dhcp_leases(section_text(sections, "dhcp_leases"))
     merge_leases(clients, leases)
@@ -455,6 +457,48 @@ def parse_logread_events(raw: str) -> dict[str, int]:
         if "dnsmasq-dhcp" in normalized or "dhcp" in normalized:
             summary["dhcp_events"] += 1
     return summary
+
+
+def persist_router_log_tail(hostname: str, raw: str) -> None:
+    if os.environ.get("HOME_NETWORK_PERSIST_ROUTER_LOGS", "1").lower() in {"0", "false", "no"}:
+        return
+    if not raw.strip():
+        return
+
+    try:
+        log_dir = router_log_dir()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        safe_hostname = re.sub(r"[^A-Za-z0-9_.-]", "_", hostname)
+        log_path = log_dir / f"{safe_hostname}.log"
+        poll_path = log_dir / f"{safe_hostname}.last_poll"
+        existing = set(read_recent_lines(log_path))
+        new_lines = [line for line in raw.splitlines() if line.strip() and line not in existing]
+        if new_lines:
+            with log_path.open("a", encoding="utf-8") as handle:
+                for line in new_lines:
+                    handle.write(line + "\n")
+        poll_path.write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n", encoding="utf-8")
+    except OSError:
+        # Log persistence must not make router telemetry collection fail.
+        return
+
+
+def router_log_dir() -> Path:
+    return Path(os.environ.get("HOME_NETWORK_ROUTER_LOG_DIR", str(DEFAULT_ROUTER_LOG_DIR)))
+
+
+def read_recent_lines(path: Path, max_bytes: int = 200_000) -> list[str]:
+    if not path.exists():
+        return []
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - max_bytes))
+            data = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return []
+    return data.splitlines()
 
 
 def summarize_clients(clients: list[dict[str, Any]]) -> dict[str, Any]:
