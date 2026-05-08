@@ -136,6 +136,52 @@ export interface HomeNetworkConfigSummary {
   warnings?: string[];
 }
 
+export interface HomeWindowsLaptopRecord {
+  label: string;
+  ssh_target?: string;
+  reachable: boolean;
+  status: HomeNetworkStatus;
+  warnings?: string[];
+  collected_at?: string;
+  computer_name?: string;
+  username?: string;
+  os?: {
+    caption?: string;
+    version?: string;
+    last_boot?: string;
+  };
+  memory?: {
+    free_physical_mb?: number;
+    total_visible_mb?: number;
+  };
+  lan_ipv4_addresses?: Array<{
+    InterfaceAlias?: string;
+    IPAddress?: string;
+    PrefixLength?: number;
+  }>;
+  wifi?: {
+    ssid?: string;
+    bssid?: string;
+    radio_type?: string;
+    channel?: string | number;
+    rx_rate_mbps?: number;
+    tx_rate_mbps?: number;
+    signal?: string;
+    signal_percent?: number;
+  };
+  openssh?: {
+    service_status?: string;
+    start_type?: string;
+    listener_count?: number;
+  };
+  security?: {
+    defender_realtime?: boolean;
+    norton_360_present?: boolean;
+    norton_family_present?: boolean;
+    nextdns_running?: boolean;
+  };
+}
+
 export interface HomeNetworkSnapshot {
   schema_version: 1;
   collected_at: string;
@@ -148,6 +194,7 @@ export interface HomeNetworkSnapshot {
   warnings: string[];
   monitoring_warnings?: string[];
   config_summaries?: HomeNetworkConfigSummary[];
+  windows_laptops?: HomeWindowsLaptopRecord[];
 }
 
 export interface HomeNetworkHistoryEntry {

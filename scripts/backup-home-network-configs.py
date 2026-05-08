@@ -22,6 +22,11 @@ ROUTERS = [
 ]
 
 SENSITIVE_RE = re.compile(r"(key|password|passwd|secret|token|psk|macaddr)\b", re.I)
+EXPECTED_SSIDS_BY_ROLE = {
+    "main": {"Heaviside", "Home-K", "HG-CORP"},
+    "office": {"Heaviside", "Home-K-Office"},
+    "school": {"Heaviside", "Home-K-School"},
+}
 
 
 def main() -> int:
@@ -73,10 +78,11 @@ def backup_router(router: dict[str, str], backup_root: Path, summary_root: Path)
         if name == "nextdns" and "config" in text:
             nextdns_running = True
 
-    if not {"Heaviside", "Home-K"}.issubset(ssids):
+    expected_ssids = EXPECTED_SSIDS_BY_ROLE.get(router["role"], {"Heaviside"})
+    if not expected_ssids.issubset(ssids):
         warnings.append("expected SSIDs missing")
     if not kids_bridge_ok:
-        warnings.append("Home-K/kids bridge mapping not proven from wireless config")
+        warnings.append("kids SSID mapping not proven from wireless config")
 
     summary: dict[str, Any] = {
         "router_hostname": router["hostname"],

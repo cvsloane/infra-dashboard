@@ -110,6 +110,7 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     collected_at = now.isoformat()
     router_rows: list[dict[str, Any]] = []
     clients: list[dict[str, Any]] = []
+    lease_sources: list[dict[str, dict[str, str]]] = []
     dns_rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     monitoring_warnings: list[str] = check_syslog_freshness(now)
@@ -117,15 +118,20 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     with ThreadPoolExecutor(max_workers=min(len(routers), 6)) as executor:
         futures = [executor.submit(collect_router, router) for router in routers]
         for future in as_completed(futures):
-            row, router_clients, dns = future.result()
+            row, router_clients, dns, leases = future.result()
             router_rows.append(row)
             clients.extend(router_clients)
             dns_rows.append(dns)
+            lease_sources.append(leases)
             warnings.extend(row.get("warnings", []))
 
+    merge_leases(clients, merge_lease_sources(lease_sources))
     status = "error" if any(not r["reachable"] for r in router_rows) else "warning" if warnings else "ok"
     if any((r.get("nextdns") or {}).get("running") is False for r in router_rows):
         status = "error"
+
+    windows_laptop_snapshot = load_windows_laptop_snapshot()
+    monitoring_warnings.extend(windows_laptop_snapshot.pop("monitoring_warnings", []))
 
     return {
         "schema_version": 1,
@@ -142,7 +148,62 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
         },
         "warnings": sorted(set(warnings)),
         "monitoring_warnings": sorted(set(monitoring_warnings)),
+        **windows_laptop_snapshot,
     }
+
+
+def load_windows_laptop_snapshot() -> dict[str, Any]:
+    path = os.environ.get("HOME_NETWORK_WINDOWS_LAPTOPS_JSON")
+    if not path:
+        path = "/var/lib/home-network-monitor/windows-laptops/latest.json"
+
+    laptop_path = Path(path)
+    if not laptop_path.exists():
+        return {}
+
+    try:
+        payload = json.loads(laptop_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "windows_laptops": [],
+            "monitoring_warnings": [f"windows laptop snapshot unreadable: {exc}"],
+        }
+
+    laptops = payload.get("windows_laptops")
+    if not isinstance(laptops, list):
+        return {
+            "windows_laptops": [],
+            "monitoring_warnings": ["windows laptop snapshot missing windows_laptops array"],
+        }
+
+    sanitized = [sanitize_windows_laptop(row) for row in laptops if isinstance(row, dict)]
+    return {"windows_laptops": sanitized}
+
+
+def sanitize_windows_laptop(row: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = {
+        "label",
+        "ssh_target",
+        "reachable",
+        "status",
+        "warnings",
+        "collected_at",
+        "computer_name",
+        "username",
+        "os",
+        "memory",
+        "lan_ipv4_addresses",
+        "wifi",
+        "openssh",
+        "security",
+    }
+    sanitized = {key: row[key] for key in allowed_keys if key in row}
+    sanitized.setdefault("label", "unknown-windows-laptop")
+    sanitized.setdefault("reachable", False)
+    sanitized.setdefault("status", "unknown")
+    if not isinstance(sanitized.get("warnings"), list):
+        sanitized["warnings"] = []
+    return sanitized
 
 
 def check_syslog_freshness(now: dt.datetime) -> list[str]:
@@ -172,7 +233,7 @@ def positive_int_from_env(name: str, fallback: int) -> int:
     return value if value > 0 else fallback
 
 
-def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, dict[str, str]]]:
     role = router["role"]
     expected_hostname = router["hostname"]
     ip = router["ip"]
@@ -191,7 +252,7 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
             "reachable": False,
             "warnings": warnings,
         }
-        return row, [], {"router_hostname": expected_hostname, "running": False, "message": "SSH unreachable"}
+        return row, [], {"router_hostname": expected_hostname, "running": False, "message": "SSH unreachable"}, {}
 
     wan = parse_ifstatus(section_text(sections, "ifstatus_wan"), "wan")
     lan = parse_ifstatus(section_text(sections, "ifstatus_lan"), "lan")
@@ -213,7 +274,8 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
     if role == "main" and not route_has_default(section_text(sections, "route")):
         warnings.append(f"{hostname} default route missing")
     ssids = {r.get("ssid") for r in radios}
-    if radios and not {"Heaviside", "Home-K"}.issubset(ssids):
+    expected_ssids = expected_ssids_for_role(role)
+    if radios and not expected_ssids.issubset(ssids):
         warnings.append(f"{hostname} expected SSIDs missing")
 
     row = {
@@ -233,7 +295,17 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
         "radios": radios,
         "warnings": warnings,
     }
-    return row, clients, nextdns
+    return row, clients, nextdns, leases
+
+
+def expected_ssids_for_role(role: str) -> set[str]:
+    if role == "main":
+        return {"Heaviside", "Home-K", "HG-CORP"}
+    if role == "office":
+        return {"Heaviside", "Home-K-Office"}
+    if role == "school":
+        return {"Heaviside", "Home-K-School"}
+    return {"Heaviside"}
 
 
 def run_ssh(host: str, script: str) -> subprocess.CompletedProcess[str]:
@@ -394,7 +466,8 @@ def summarize_clients(clients: list[dict[str, Any]]) -> dict[str, Any]:
         client for client in clients
         if isinstance(client.get("signal_dbm"), int) and client["signal_dbm"] <= -75
     ]
-    home_k_clients = [client for client in clients if client.get("ssid") == "Home-K"]
+    kids_ssids = {"Home-K", "Home-K-Office", "Home-K-School"}
+    home_k_clients = [client for client in clients if client.get("ssid") in kids_ssids]
     unknown_clients = [
         client for client in clients
         if not client.get("hostname") or str(client.get("hostname")).strip().lower() in {"*", "unknown"}
@@ -496,13 +569,14 @@ def parse_wifi_sections(hostname: str, role: str, sections: dict[str, str]) -> t
 def parse_radio(hostname: str, iface: str, raw: str) -> dict[str, Any]:
     ssid = match_text(r'ESSID: "([^"]+)"', raw)
     channel = match_text(r"Channel:\s*([^\s]+)", raw)
+    frequency = match_text(r"Channel:\s*[^\s]+\s+\(([\d.]+)\s+GHz\)", raw)
     bssid = match_text(r"Access Point:\s*([0-9A-Fa-f:]{17})", raw)
     tx_power = match_text(r"Tx-Power:\s*([\d.]+)", raw)
     return {
         "router_hostname": hostname,
         "interface": iface,
         "ssid": ssid,
-        "band": band_from_channel(channel),
+        "band": band_from_radio(channel, frequency),
         "channel": channel,
         "bssid": bssid,
         "tx_power_dbm": float(tx_power) if tx_power else None,
@@ -511,22 +585,30 @@ def parse_radio(hostname: str, iface: str, raw: str) -> dict[str, Any]:
 
 def parse_assoc(hostname: str, role: str, radio: dict[str, Any], raw: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     for line in raw.splitlines():
         mac_match = re.match(r"^([0-9A-Fa-f:]{17})\s+(-?\d+)\s+dBm", line.strip())
-        if not mac_match:
+        if mac_match:
+            current = {
+                "mac": mac_match.group(1).lower(),
+                "router_hostname": hostname,
+                "router_role": role,
+                "ssid": radio.get("ssid"),
+                "band": radio.get("band"),
+                "bssid": radio.get("bssid"),
+                "signal_dbm": int(mac_match.group(2)),
+                "rx_rate_mbps": None,
+                "tx_rate_mbps": None,
+            }
+            out.append(current)
             continue
-        rate_values = [float(v) for v in re.findall(r"([\d.]+)\s+MBit/s", line)]
-        out.append({
-            "mac": mac_match.group(1).lower(),
-            "router_hostname": hostname,
-            "router_role": role,
-            "ssid": radio.get("ssid"),
-            "band": radio.get("band"),
-            "bssid": radio.get("bssid"),
-            "signal_dbm": int(mac_match.group(2)),
-            "rx_rate_mbps": rate_values[0] if rate_values else None,
-            "tx_rate_mbps": rate_values[1] if len(rate_values) > 1 else (rate_values[0] if rate_values else None),
-        })
+        if current is None:
+            continue
+        rate_match = re.search(r"\b(RX|TX):\s*([\d.]+)\s+MBit/s", line)
+        if not rate_match:
+            continue
+        key = "rx_rate_mbps" if rate_match.group(1) == "RX" else "tx_rate_mbps"
+        current[key] = float(rate_match.group(2))
     return out
 
 
@@ -560,6 +642,20 @@ def merge_leases(clients: list[dict[str, Any]], leases: dict[str, dict[str, str]
             client["lease_expires_at"] = lease["lease_expires_at"]
 
 
+def merge_lease_sources(sources: list[dict[str, dict[str, str]]]) -> dict[str, dict[str, str]]:
+    merged: dict[str, dict[str, str]] = {}
+    for leases in sources:
+        for mac, lease in leases.items():
+            current = merged.get(mac)
+            if current is None or lease_sort_key(lease) >= lease_sort_key(current):
+                merged[mac] = lease
+    return merged
+
+
+def lease_sort_key(lease: dict[str, str]) -> str:
+    return lease.get("lease_expires_at") or ""
+
+
 def parse_uptime(raw: str) -> int | None:
     first = raw.split()[0] if raw.split() else None
     return int(float(first)) if first else None
@@ -591,7 +687,19 @@ def match_text(pattern: str, raw: str) -> str | None:
     return match.group(1) if match else None
 
 
-def band_from_channel(channel: str | None) -> str | None:
+def band_from_radio(channel: str | None, frequency_ghz: str | None = None) -> str | None:
+    if frequency_ghz:
+        try:
+            frequency = float(frequency_ghz)
+        except ValueError:
+            frequency = None
+        if frequency is not None:
+            if frequency < 3:
+                return "2.4 GHz"
+            if frequency < 5.925:
+                return "5 GHz"
+            return "6 GHz"
+
     if not channel:
         return None
     try:

@@ -9,6 +9,7 @@ import { RouterTable } from '@/components/home-network/RouterTable';
 import { ClientAssociations } from '@/components/home-network/ClientAssociations';
 import { DnsPolicyPanel } from '@/components/home-network/DnsPolicyPanel';
 import { WarningsPanel } from '@/components/home-network/WarningsPanel';
+import { WindowsLaptopPanel } from '@/components/home-network/WindowsLaptopPanel';
 import type { HomeNetworkReadResponse } from '@/types/home-network';
 
 export default function HomeNetworkPage() {
@@ -95,6 +96,7 @@ export default function HomeNetworkPage() {
       {snapshot ? (
         <>
           <RouterTable routers={snapshot.routers} />
+          <WindowsLaptopPanel laptops={snapshot.windows_laptops || []} />
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <ClientAssociations clients={snapshot.clients} />
             <div className="space-y-6">

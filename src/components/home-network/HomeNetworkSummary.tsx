@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Router, Users, Wifi } from 'lucide-react';
+import { Activity, AlertTriangle, Laptop, Router, Users, Wifi } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { HomeNetworkReadResponse } from '@/types/home-network';
 import { formatMaybeSeconds, statusClassName } from './status-utils';
@@ -17,6 +17,8 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
   const duplicateHostnameCount = snapshot?.client_summary?.duplicate_hostname_count ?? 0;
   const radioCount = snapshot?.routers.reduce((sum, router) => sum + (router.radios?.length ?? 0), 0) ?? 0;
   const warningCount = data.computed_warnings.length;
+  const laptopCount = snapshot?.windows_laptops?.length ?? 0;
+  const laptopWarningCount = snapshot?.windows_laptops?.filter((laptop) => laptop.status !== 'ok').length ?? 0;
 
   const cards = [
     {
@@ -48,6 +50,13 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
       className: veryWeakClientCount > 0 ? statusClassName('warning') : 'border-border bg-card',
     },
     {
+      label: 'Laptops',
+      value: `${laptopCount}`,
+      detail: laptopCount > 0 ? `${laptopWarningCount} need attention` : 'No endpoint snapshot',
+      icon: Laptop,
+      className: laptopWarningCount > 0 ? statusClassName('warning') : 'border-border bg-card',
+    },
+    {
       label: 'Warnings',
       value: `${warningCount}`,
       detail: warningCount > 0 ? data.computed_warnings[0] : 'No active warnings',
@@ -57,7 +66,7 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
       {cards.map((card) => (
         <Card key={card.label} className={card.className}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

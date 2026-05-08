@@ -3,6 +3,7 @@ import {
   Archive,
   Bell,
   Bot,
+  CalendarClock,
   Database,
   Home,
   LayoutDashboard,
@@ -51,6 +52,7 @@ export const navGroups: DashboardNavGroup[] = [
       { name: 'Queues', href: '/queues', icon: ListTodo },
       { name: 'Workers', href: '/workers', icon: Users },
       { name: 'Hermes', href: '/hermes', icon: Bot },
+      { name: 'Cron jobs', href: '/crons', icon: CalendarClock },
       { name: 'Alerts', href: '/alerts', icon: Bell },
     ],
   },
@@ -66,6 +68,7 @@ export const dashboardKeyboardShortcuts: KeyboardShortcutDefinition[] = [
   { id: 'go-queues', keys: ['g', 'q'], description: 'Go to queues', href: '/queues' },
   { id: 'go-workers', keys: ['g', 'w'], description: 'Go to workers', href: '/workers' },
   { id: 'go-hermes', keys: ['g', 'm'], description: 'Go to Hermes fleet', href: '/hermes' },
+  { id: 'go-crons', keys: ['g', 'r'], description: 'Go to scheduled jobs', href: '/crons' },
   { id: 'go-alerts', keys: ['g', 'a'], description: 'Go to alerts', href: '/alerts' },
   { id: 'show-help', keys: ['?'], description: 'Show keyboard shortcuts' },
 ]

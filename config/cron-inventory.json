@@ -1,0 +1,561 @@
+{
+  "_doc": "Curated metadata for scheduled jobs. The cron-collector matches discovered jobs against the entries below by `match` rules and merges the metadata in. Schema mirrors agents/cron-collector/src/inventory.ts.",
+  "host_aliases": {
+    "vmi2868847": "apps-vps",
+    "vmi2869169": "db-vps"
+  },
+  "jobs": [
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "vault-lint.sh" },
+      "name": "Vault Lint",
+      "description": "Daily SloaneVault link/orphan/staleness lint. Writes a daily report read by the vault-lint skill.",
+      "owner": "cvsloane",
+      "tags": ["vault", "qa"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "qmd-daily-update.sh" },
+      "name": "QMD daily update",
+      "description": "Re-indexes the SloaneVault qmd corpus so semantic search stays current.",
+      "owner": "cvsloane",
+      "tags": ["vault", "search"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "run-outreach-scheduler.sh" },
+      "name": "HG outreach scheduler",
+      "description": "Drives the cold-email outreach send/throttle loop for hg-outbound.",
+      "owner": "cvsloane",
+      "tags": ["cold-email", "outbound"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "x-accel-cron.sh" },
+      "name": "X-Accel Cron Dispatcher",
+      "description": "Multi-function cron dispatcher for the X-Accel social media management app (x.heavisidetechnology.com). Calls /api/cron/* endpoints for publish-scheduled, fast-reply, drip-engage, content-generation, metric snapshots, fact-checks, and weekly reports. All endpoints returning ok:true in logs. Dashboard may classify as failure due to run inference heuristics.",
+      "owner": "root",
+      "tags": ["app-endpoint", "x-accel", "social-media"],
+      "severity_if_missing": "high",
+      "false_positive_reason": "Dashboard run-inference marks this as failure because the script runs every minute and the collector cannot reliably detect individual endpoint outcomes from the combined log. Manual log inspection confirms all endpoints returning ok:true."
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "pasco-construction-news-ingest" },
+      "name": "Pasco Construction News Ingest",
+      "description": "Ingests Pasco county construction news data every 6 hours.",
+      "owner": "root",
+      "tags": ["data-sync", "news"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "heavisideos-sync-cold-email" },
+      "name": "HeavisideOS Cold Email Sync",
+      "description": "Rsyncs cold email data from heavisidelinux to apps-vps every 5 minutes. Manual proof passed on 2026-04-27 after Tailscale/SSH reachability recovered.",
+      "owner": "root",
+      "tags": ["data-sync", "cold-email"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "systemd-timer", "systemd_unit": "infra-dashboard-route-auto-healer.service" },
+      "name": "Infra Dashboard Traefik Route Auto-Healer",
+      "description": "Checks if Traefik can route to the infra-dashboard container and restarts it if the route is lost. Replaced the raw crontab row on 2026-04-27; script now discovers the current Coolify container by label.",
+      "owner": "root",
+      "tags": ["infra", "dashboard", "watchdog", "systemd"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "hg-cron.sh recover-stuck" },
+      "name": "HG Market Report: Recover Stuck Jobs",
+      "description": "Recovers stuck hg-market-report worker jobs every 2 minutes.",
+      "owner": "root",
+      "tags": ["hg-market-report"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "hg-cron.sh reconcile-citations" },
+      "name": "HG Market Report: Reconcile Citations",
+      "description": "Reconciles citation data for hg-market-report every 10 minutes.",
+      "owner": "root",
+      "tags": ["hg-market-report"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "hg-cron.sh process-email-queue" },
+      "name": "HG Market Report: Process Email Queue",
+      "description": "Processes queued outgoing emails for hg-market-report every 5 minutes.",
+      "owner": "root",
+      "tags": ["hg-market-report", "email"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "hg-websites-cron.sh" },
+      "name": "HG Websites Cron",
+      "description": "Periodic hg-websites maintenance tasks every 6 hours.",
+      "owner": "root",
+      "tags": ["hg-websites"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "hg-websites-careers-cron.sh" },
+      "name": "HG Websites Careers Cron",
+      "description": "Syncs careers data for hg-websites every 15 minutes.",
+      "owner": "root",
+      "tags": ["hg-websites", "careers"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "update-hgmarketreport-routing" },
+      "name": "HG Market Report Routing Update",
+      "description": "Updates routing configuration for hg-market-report every minute.",
+      "owner": "root",
+      "tags": ["hg-market-report"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "tracking-sweeper.sh" },
+      "name": "HG SEO Tracking Sweeper",
+      "description": "Cleans stale tracking data for HG SEO twice daily.",
+      "owner": "root",
+      "tags": ["seo", "hg"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "sync-knowledge-graph.sh" },
+      "name": "Knowledge Graph Sync",
+      "description": "Syncs knowledge graph data hourly.",
+      "owner": "root",
+      "tags": ["data-sync"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "instantly_reply_ingest.py" },
+      "name": "Instantly Reply Ingest",
+      "description": "Ingests reply data from Instantly.ai cold email platform (3x daily at 8am, 12pm, 5pm).",
+      "owner": "root",
+      "tags": ["cold-email", "instantly"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "instantly_reply_triage.py" },
+      "name": "Instantly Reply Triage",
+      "description": "Triage/classify replies from Instantly.ai cold email platform (3x daily).",
+      "owner": "root",
+      "tags": ["cold-email", "instantly"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "command_contains": "instantly_reply_digest.py" },
+      "name": "Instantly Reply Digest",
+      "description": "Generates reply digest summaries from Instantly.ai cold email platform (3x daily).",
+      "owner": "root",
+      "tags": ["cold-email", "instantly"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "systemd-timer", "systemd_unit": "agency-commander-facebook-sync.service" },
+      "name": "Agency Commander Facebook Ads Sync",
+      "description": "Daily Facebook Ads sync for Agency Commander. Runs through a named systemd timer and reads CRON_SECRET from the app's Coolify env file.",
+      "owner": "root",
+      "tags": ["app-endpoint", "agency-commander", "facebook-ads"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "systemd-timer", "systemd_unit": "apps-vps-restic-backup.service" },
+      "name": "Restic Weekly Backup (apps-vps)",
+      "description": "Weekly restic backup of apps-vps data. Replaced /etc/cron.d/restic-weekly on 2026-04-27 after restoring disk headroom; old row is paused pending scheduled proof.",
+      "owner": "root",
+      "tags": ["backup", "restic", "systemd"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "check_tls_expiry.sh" },
+      "name": "TLS Expiry Check",
+      "description": "Daily check of TLS certificate expiry with 21-day warning threshold.",
+      "owner": "root",
+      "tags": ["tls", "monitoring"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "check_coolify_origin_cert" },
+      "name": "Coolify Origin Cert Check",
+      "description": "Daily check of Coolify origin certificate expiry with 21-day warning threshold.",
+      "owner": "root",
+      "tags": ["tls", "coolify"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "cron.d", "command_contains": "docker-prune.sh" },
+      "name": "Docker Prune",
+      "description": "Daily cleanup of unused Docker images, containers, and volumes.",
+      "owner": "root",
+      "tags": ["docker", "maintenance"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "cron.d", "command_contains": "coolify_queue_once" },
+      "name": "Coolify Queue Once",
+      "description": "Coolify internal queue processor run every 30 minutes.",
+      "owner": "root",
+      "tags": ["coolify"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "cron.d", "command_contains": "renew-coolify-build-registry-cert" },
+      "name": "Coolify Build Registry Cert Renewal",
+      "description": "Daily renewal check for Coolify build registry TLS certificate.",
+      "owner": "root",
+      "tags": ["coolify", "tls"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "cron.d", "command_contains": "hgmr-report-health-cron" },
+      "name": "HG Market Report Health Check",
+      "description": "Health check for hg-market-report report generation every 15 minutes.",
+      "owner": "root",
+      "tags": ["hg-market-report"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "apps-vps", "source": "cron.d", "command_contains": "hgmr-worker-health-check" },
+      "name": "HG Market Report Worker Health",
+      "description": "Health check for hg-market-report worker processes every 5 minutes.",
+      "owner": "root",
+      "tags": ["hg-market-report"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "db-vps", "source": "systemd-timer", "systemd_unit": "postgres-logical-backup.service" },
+      "name": "Postgres Daily Backup",
+      "description": "Daily Postgres logical backup at 02:00. Replaced the root crontab row on 2026-04-27; the old row is paused pending scheduled proof.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "systemd"],
+      "severity_if_missing": "critical"
+    },
+    {
+      "match": { "host": "db-vps", "source": "user-crontab", "command_contains": "restore_drill.sh" },
+      "name": "Postgres Restore Drill (paused)",
+      "description": "Monthly restore drill. Paused in crontab; replaced by systemd timer postgres-restore-drill.timer.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "paused"],
+      "severity_if_missing": "critical"
+    },
+    {
+      "match": { "host": "db-vps", "source": "user-crontab", "command_contains": "refresh_agency_financials_mv.sh" },
+      "name": "Agency Financials MV Refresh",
+      "description": "Daily refresh of agency financials materialized views in Postgres at 02:30.",
+      "owner": "root",
+      "tags": ["finance", "postgres"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "db-vps", "source": "cron.d", "command_contains": "agent-console-retention" },
+      "name": "Agent Console Retention Cleanup",
+      "description": "Daily cleanup of old agent console session data at 04:15.",
+      "owner": "root",
+      "tags": ["postgres", "maintenance"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "db-vps", "source": "systemd-timer", "systemd_unit": "db-vps-restic-backup.service" },
+      "name": "Restic Weekly Backup (db-vps)",
+      "description": "Weekly restic backup of db-vps data. Replaced /etc/cron.d/restic-weekly on 2026-04-27; old row is paused pending scheduled proof.",
+      "owner": "root",
+      "tags": ["backup", "restic", "systemd"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "db-vps", "source": "systemd-timer", "systemd_unit": "rocketchat-mongo-backup.service" },
+      "name": "RocketChat Mongo Backup",
+      "description": "Daily MongoDB backup for Rocket.Chat at 03:20. Replaced /etc/cron.d/rocketchat-mongo-backup on 2026-04-27; old row is paused pending scheduled proof.",
+      "owner": "root",
+      "tags": ["backup", "mongodb", "rocketchat", "systemd"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "db-vps", "source": "systemd-timer", "systemd_unit": "postgres-walg-basebackup-push.service" },
+      "name": "WAL-G Basebackup Push",
+      "description": "Weekly WAL-G physical base backup push to remote storage. Replaced /etc/cron.d/walg_basebackup_push on 2026-04-27; old row is paused pending scheduled proof.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "walg", "systemd"],
+      "severity_if_missing": "critical"
+    },
+    {
+      "match": { "host": "db-vps", "source": "cron.d", "command_contains": "logical_restore_check" },
+      "name": "Logical Restore Check (paused)",
+      "description": "Monthly logical restore verification. Paused in cron.d; replaced by systemd timer postgres-logical-restore-check.timer.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "paused"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "db-vps", "source": "cron.d", "command_contains": "restore_drill_monitor" },
+      "name": "Restore Drill Monitor (paused)",
+      "description": "Daily restore drill freshness monitor. Paused in cron.d; replaced by systemd timer postgres-restore-drill-monitor.timer.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "paused"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "db-vps", "source": "cron.d", "command_contains": "walg_basebackup_monitor" },
+      "name": "WAL-G Basebackup Monitor (paused)",
+      "description": "Daily WAL-G base backup freshness monitor. Paused in cron.d; replaced by systemd timer postgres-walg-basebackup-monitor.timer.",
+      "owner": "root",
+      "tags": ["backup", "postgres", "walg", "paused"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "staticroute" },
+      "name": "Static Route (reboot)",
+      "description": "Restores static routes at boot.",
+      "owner": "root",
+      "tags": ["network"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "run_meta_sync_with_bws.sh" },
+      "name": "GHL ↔ Meta lead sync",
+      "description": "Syncs lead data between GoHighLevel and Meta Ads via Bitwarden Secrets-Manager-loaded creds.",
+      "owner": "cvsloane",
+      "tags": ["ghl", "meta-ads", "lead-ops"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "open-agents/config/logrotate.conf" },
+      "name": "open-agents log rotation",
+      "description": "Rotates Hermes / open-agents log directories to keep disk usage bounded.",
+      "owner": "cvsloane",
+      "tags": ["logs", "hermes"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "pbn-domain-pipeline" },
+      "name": "PBN domain pipeline",
+      "description": "Daily PBN domain enrichment + reporting run.",
+      "owner": "cvsloane",
+      "tags": ["seo", "pbn"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "guardrail_review_reminder.py" },
+      "name": "Guardrail review reminder",
+      "description": "Daily reminder check for SloaneVault guardrail items needing review.",
+      "owner": "cvsloane",
+      "tags": ["vault", "guardrails"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "refresh-uv-age-gate" },
+      "name": "uv age-gate refresh",
+      "description": "Refreshes the uv package age-gate cache (npm release-age guardrail).",
+      "owner": "cvsloane",
+      "tags": ["dev-workflow"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "host": "heavisidelinux", "command_contains": "agency-financials/scripts/cron/run-all-syncs.sh" },
+      "name": "Agency financials sync",
+      "description": "Daily refresh of Stripe / GHL / ad-platform revenue + spend feeds for agency-financials.",
+      "owner": "cvsloane",
+      "tags": ["finance", "agency"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "systemd_unit": "logrotate.service" },
+      "name": "logrotate (system)",
+      "description": "OS-level log rotation across /var/log.",
+      "owner": "root",
+      "tags": ["system", "logs"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "systemd_unit": "restic-backup.service" },
+      "name": "Restic backup",
+      "description": "Daily restic snapshot of important directories on this host.",
+      "owner": "root",
+      "tags": ["backup"],
+      "severity_if_missing": "high"
+    },
+    {
+      "match": { "systemd_unit": "smart-weekly-check.service" },
+      "name": "SMART weekly disk check",
+      "description": "smartctl long self-test of the system disk.",
+      "owner": "root",
+      "tags": ["disk", "hardware"],
+      "severity_if_missing": "medium"
+    },
+    {
+      "match": { "systemd_unit": "auto-update.service" },
+      "name": "OS auto-update",
+      "description": "Weekly unattended apt-upgrade.",
+      "owner": "root",
+      "tags": ["system", "updates"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "fstrim.service" },
+      "name": "Filesystem TRIM",
+      "description": "Weekly fstrim across SSD-backed filesystems.",
+      "owner": "root",
+      "tags": ["disk"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "apt-daily.service" },
+      "name": "apt daily metadata refresh",
+      "owner": "root",
+      "tags": ["system"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "apt-daily-upgrade.service" },
+      "name": "apt daily upgrade",
+      "owner": "root",
+      "tags": ["system"],
+      "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "fwupd-refresh.service" },
+      "name": "Firmware update refresh",
+      "description": "fwupd metadata pull (system firmware update catalog).",
+      "owner": "root", "tags": ["system", "firmware"], "severity_if_missing": "low",
+      "false_positive_reason": "fwupdmgr exits code 2 when metadata is already current. This is not a failure -- it means no firmware updates are available. All 4 hosts show the same behavior."
+    },
+    {
+      "match": { "systemd_unit": "anacron.service" },
+      "name": "Anacron dispatcher",
+      "description": "Runs missed periodic jobs (cron.{daily,weekly,monthly}).",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "apport-autoreport.service" },
+      "name": "Apport autoreport",
+      "description": "Ubuntu crash reporter daily summary.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "dpkg-db-backup.service" },
+      "name": "dpkg DB backup",
+      "description": "Snapshots /var/lib/dpkg/status before package operations.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "e2scrub_all.service" },
+      "name": "ext4 scrub",
+      "description": "Online ext4 metadata consistency check.",
+      "owner": "root", "tags": ["disk"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "etckeeper.service" },
+      "name": "etckeeper auto-commit",
+      "description": "Tracks /etc changes in a local git repo.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "journal-vacuum.service" },
+      "name": "journal vacuum",
+      "description": "Bounds the systemd journal disk usage.",
+      "owner": "root", "tags": ["logs"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "man-db.service" },
+      "name": "man-db rebuild",
+      "description": "Rebuilds the man-page index.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "motd-news.service" },
+      "name": "MOTD news",
+      "description": "Refreshes the dynamic message-of-the-day banner.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "snapd.snap-repair.service" },
+      "name": "snapd repair",
+      "description": "Snap package self-heal check.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "sysstat-collect.service" },
+      "name": "sysstat collect",
+      "description": "Per-10-minute system performance metric capture.",
+      "owner": "root", "tags": ["system", "metrics"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "sysstat-summary.service" },
+      "name": "sysstat summary",
+      "description": "Daily summary of sysstat-collected metrics.",
+      "owner": "root", "tags": ["system", "metrics"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "system-health-check.service" },
+      "name": "system health check",
+      "description": "OEM health check service.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "systemd-tmpfiles-clean.service" },
+      "name": "tmpfiles clean",
+      "description": "Cleans /tmp and other tmpfiles.d-managed directories.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "ua-timer.service" },
+      "name": "Ubuntu Advantage refresh",
+      "description": "Ubuntu Pro/UA subscription metadata refresh.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "update-notifier-download.service" },
+      "name": "update-notifier download",
+      "description": "Pulls package metadata for the desktop update notifier.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "systemd_unit": "update-notifier-motd.service" },
+      "name": "update-notifier MOTD",
+      "description": "Refreshes the update banner shown at login.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "system-crontab", "command_contains": "cron.daily" },
+      "name": "system run-parts: cron.daily",
+      "description": "Dispatcher in /etc/crontab that runs everything in /etc/cron.daily (skipped if anacron is running).",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "system-crontab", "command_contains": "cron.weekly" },
+      "name": "system run-parts: cron.weekly",
+      "description": "Dispatcher in /etc/crontab that runs everything in /etc/cron.weekly (skipped if anacron is running).",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "system-crontab", "command_contains": "cron.monthly" },
+      "name": "system run-parts: cron.monthly",
+      "description": "Dispatcher in /etc/crontab that runs everything in /etc/cron.monthly (skipped if anacron is running).",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "system-crontab", "schedule": "17 * * * *" },
+      "name": "system run-parts: cron.hourly",
+      "description": "Dispatcher in /etc/crontab that runs everything in /etc/cron.hourly.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "sysstat" },
+      "name": "sysstat (cron.d)",
+      "description": "10-minute sysstat sample + nightly rotation entries.",
+      "owner": "root", "tags": ["system", "metrics"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "anacron" },
+      "name": "anacron retry (cron.d)",
+      "description": "Retries missed anacron jobs hourly.",
+      "owner": "root", "tags": ["system"], "severity_if_missing": "low"
+    },
+    {
+      "match": { "source": "cron.d", "command_contains": "e2scrub_all" },
+      "name": "ext4 scrub (cron.d)",
+      "description": "Cron-driven ext4 scrub fallback (in addition to the systemd timer).",
+      "owner": "root", "tags": ["disk"], "severity_if_missing": "low"
+    }
+  ]
+}

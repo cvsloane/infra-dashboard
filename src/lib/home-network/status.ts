@@ -199,6 +199,33 @@ export function computeHomeNetworkStatus(
     }
   }
 
+  for (const laptop of snapshot.windows_laptops || []) {
+    if (!laptop.reachable) {
+      warnings.add(`${laptop.label} is unreachable over SSH`);
+      if (status === 'ok') status = 'warning';
+    }
+    if (laptop.openssh?.service_status && laptop.openssh.service_status !== 'Running') {
+      warnings.add(`${laptop.label} sshd is ${laptop.openssh.service_status}`);
+      if (status === 'ok') status = 'warning';
+    }
+    if (laptop.openssh?.start_type && laptop.openssh.start_type !== 'Automatic') {
+      warnings.add(`${laptop.label} sshd is not Automatic`);
+      if (status === 'ok') status = 'warning';
+    }
+    if (laptop.security?.norton_360_present) {
+      warnings.add(`${laptop.label} still has Norton 360/Norton Antivirus present`);
+      if (status === 'ok') status = 'warning';
+    }
+    if (laptop.security?.norton_family_present === false) {
+      warnings.add(`${laptop.label} Norton Family missing`);
+      if (status === 'ok') status = 'warning';
+    }
+    if (laptop.security?.defender_realtime === false) {
+      warnings.add(`${laptop.label} Defender real-time protection is off`);
+      if (status === 'ok') status = 'warning';
+    }
+  }
+
   return { status, warnings: [...warnings], monitoringWarnings: [...monitoringWarnings] };
 }
 
