@@ -8,6 +8,7 @@ Complete documentation for all environment variables in infra-dashboard. Use thi
 - [Prometheus Metrics](#prometheus-metrics) — Metrics collection endpoints
 - [Alerting](#alerting) — Alertmanager firing alerts
 - [Redis / BullMQ](#redis--bullmq) — Queue monitoring and configuration storage
+- [NextDNS Log Capture](#nextdns-log-capture) — Per-device DNS log storage and child-device coverage alerts
 - [Uptime Kuma](#uptime-kuma) — External uptime monitoring
 - [Site Health](#site-health) — Health check exclusions
 - [Worker Supervisor](#worker-supervisor) — Worker health monitoring
@@ -289,6 +290,52 @@ Default: `180`
 **Optional** — Max number of events to display in the dashboard.
 
 Default: `50` (max `200`)
+
+---
+
+## NextDNS Log Capture
+
+These settings enable durable NextDNS DNS log storage for the Home Network page. Use a dashboard-owned PostgreSQL database; do not point this at Coolify's internal database.
+
+### `NEXTDNS_API_KEY`
+
+**Required for collection** — API key from the NextDNS account page.
+
+### `NEXTDNS_PROFILE_IDS`
+
+**Required for collection** — Comma-separated NextDNS profile IDs to ingest.
+
+```bash
+NEXTDNS_PROFILE_IDS=23b61e,43d9e6,25bae4
+```
+
+### `NEXTDNS_LOG_DB_URL`
+
+**Required unless `DATABASE_URL` is set** — PostgreSQL connection string for stored DNS logs.
+
+```bash
+NEXTDNS_LOG_DB_URL=postgresql://infra_dashboard:password@db-vps:5432/infra_dashboard
+```
+
+### `NEXTDNS_EXPECTED_CHILD_DEVICES`
+
+**Optional but recommended** — JSON array of child devices that should have recent NextDNS activity. Match by NextDNS `device_id` or `device_name`.
+
+```bash
+NEXTDNS_EXPECTED_CHILD_DEVICES=[{"name":"Chloe Laptop","device_names":["CHLOE-LAPTOP"],"profile_ids":["43d9e6"],"max_silent_minutes":60}]
+```
+
+When a configured device has no stored DNS logs newer than `max_silent_minutes`, `/api/home-network/dns-coverage` reports a coverage alert.
+
+### Collector Command
+
+Run the collector from cron or systemd:
+
+```bash
+npm run collect:nextdns
+```
+
+The collector creates the tables from `db/nextdns-logs.sql` if they do not already exist, fetches recent logs idempotently, and prunes rows older than `NEXTDNS_LOG_RETENTION_DAYS`.
 
 ---
 

@@ -63,6 +63,7 @@ npm run dev                 # http://localhost:3000
 | **⚙️ Worker Supervisor** | Systemd/PM2/Coolify worker health monitoring | Ensure background jobs are always running |
 | **🩹 AutoHEAL** | Automatic restart/redeploy for failing services | Reduce downtime without manual intervention |
 | **🤖 Agents** | Background automation run tracking | Monitor scheduled tasks and maintenance jobs |
+| **🛡️ Child DNS Logs** | Store NextDNS activity per device and flag silent expected devices | See domain-level activity and catch devices that stop reporting through NextDNS |
 
 ## Documentation
 
@@ -159,6 +160,8 @@ Mirror only the dashboard-relevant slice here: collector assumptions, health sem
 | `/api/postgres/backups` | GET | PostgreSQL backup freshness (logical/WAL/base/drill) |
 | `/api/servers/status` | GET | VPS metrics and site health |
 | `/api/workers/status` | GET | Worker supervisor status (systemd/PM2/Coolify) |
+| `/api/home-network/dns-logs` | GET | Query stored NextDNS logs by device, status, time range, and domain search |
+| `/api/home-network/dns-coverage` | GET | Check expected child devices for recent NextDNS activity |
 | `/api/sse/updates` | GET | Server-Sent Events stream for real-time updates |
 
 ### AutoHEAL

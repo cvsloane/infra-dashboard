@@ -8,6 +8,7 @@ import { HomeNetworkSummary } from '@/components/home-network/HomeNetworkSummary
 import { RouterTable } from '@/components/home-network/RouterTable';
 import { ClientAssociations } from '@/components/home-network/ClientAssociations';
 import { DnsPolicyPanel } from '@/components/home-network/DnsPolicyPanel';
+import { NextDnsLogsPanel } from '@/components/home-network/NextDnsLogsPanel';
 import { WarningsPanel } from '@/components/home-network/WarningsPanel';
 import { WindowsLaptopPanel } from '@/components/home-network/WindowsLaptopPanel';
 import type { HomeNetworkReadResponse } from '@/types/home-network';
@@ -94,7 +95,7 @@ export default function HomeNetworkPage() {
       <HomeNetworkSummary data={data} />
 
       {snapshot ? (
-        <>
+        <div className="space-y-6">
           <RouterTable routers={snapshot.routers} />
           <WindowsLaptopPanel laptops={snapshot.windows_laptops || []} />
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -107,10 +108,12 @@ export default function HomeNetworkPage() {
               ) : null}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <WarningsPanel warnings={data.computed_warnings.length > 0 ? data.computed_warnings : ['No snapshot has been ingested yet.']} />
       )}
+
+      <NextDnsLogsPanel />
     </div>
   );
 }
