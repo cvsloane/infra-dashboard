@@ -31,6 +31,7 @@
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "test": "vitest",
+    "test:ci": "vitest run --coverage",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",

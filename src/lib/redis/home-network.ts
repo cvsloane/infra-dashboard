@@ -5,7 +5,6 @@ import {
   getHomeNetworkMaxAgeSec,
   makeHomeNetworkHistoryEntry,
   validateHomeNetworkSnapshot,
-  validateSnapshotFreshForIngest,
 } from '@/lib/home-network/status';
 import type {
   HomeNetworkHistoryEntry,

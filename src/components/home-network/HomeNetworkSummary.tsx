@@ -15,7 +15,6 @@ export function HomeNetworkSummary({ data }: HomeNetworkSummaryProps) {
   const veryWeakClientCount = snapshot?.client_summary?.very_weak_signal ?? 0;
   const multiApMacCount = snapshot?.client_summary?.multi_ap_mac_count ?? 0;
   const duplicateHostnameCount = snapshot?.client_summary?.duplicate_hostname_count ?? 0;
-  const radioCount = snapshot?.routers.reduce((sum, router) => sum + (router.radios?.length ?? 0), 0) ?? 0;
   const warningCount = data.computed_warnings.length;
   const laptopCount = snapshot?.windows_laptops?.length ?? 0;
   const laptopWarningCount = snapshot?.windows_laptops?.filter((laptop) => laptop.status !== 'ok').length ?? 0;
