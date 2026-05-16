@@ -43,3 +43,9 @@ jobs:
           # Minimal env vars for build
           COOLIFY_API_URL: http://localhost:8000/api/v1
           PROMETHEUS_URL: http://localhost:9090
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright smoke
+        run: npm run test:e2e
