@@ -18,6 +18,7 @@ import json
 import os
 import pathlib
 import shutil
+import ssl
 import sqlite3
 import subprocess
 import sys
@@ -36,6 +37,7 @@ def main() -> int:
     parser.add_argument("--target", action="append", default=[], help="Target as LABEL=USER@HOST. Can be repeated.")
     parser.add_argument("--api-url", default=os.getenv("HOME_ACTIVITY_API_URL"), help="POST endpoint URL.")
     parser.add_argument("--host-header", default=os.getenv("HOME_ACTIVITY_HOST_HEADER"), help="Optional Host header for internal reverse-proxy routes.")
+    parser.add_argument("--insecure-tls", action="store_true", default=os.getenv("HOME_ACTIVITY_INSECURE_TLS") == "1", help="Disable TLS verification for internal Tailnet collector posts.")
     parser.add_argument("--token", default=os.getenv("HOME_ACTIVITY_INGEST_TOKEN") or os.getenv("HOME_NETWORK_INGEST_TOKEN"))
     parser.add_argument("--since-minutes", type=int, default=int(os.getenv("HOME_ACTIVITY_LOOKBACK_MINUTES", "1440")))
     parser.add_argument("--work-dir", default=None, help="Local work directory. Defaults to a temp directory.")
@@ -72,7 +74,7 @@ def main() -> int:
         if args.dry_run:
             print(json.dumps({"events": all_events, "errors": errors}, indent=2, sort_keys=True))
         else:
-            post_events(args.api_url, args.token, all_events, args.host_header)
+            post_events(args.api_url, args.token, all_events, args.host_header, args.insecure_tls)
             print(json.dumps({"ok": True, "events": len(all_events), "errors": errors}, sort_keys=True))
     finally:
         if not args.keep_work_dir and not args.work_dir:
@@ -318,7 +320,14 @@ def extract_ai_service(domain: str) -> str | None:
     return ai_domains.get(domain)
 
 
-def post_events(api_url: str, token: str, events: list[dict[str, Any]], host_header: str | None = None) -> None:
+def post_events(
+    api_url: str,
+    token: str,
+    events: list[dict[str, Any]],
+    host_header: str | None = None,
+    insecure_tls: bool = False,
+) -> None:
+    context = ssl._create_unverified_context() if insecure_tls else None
     for start in range(0, len(events), 500):
         payload = json.dumps({"events": events[start:start + 500]}).encode("utf-8")
         headers = {
@@ -335,7 +344,7 @@ def post_events(api_url: str, token: str, events: list[dict[str, Any]], host_hea
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(request, timeout=30, context=context) as response:
                 response.read()
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")

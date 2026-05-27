@@ -377,6 +377,14 @@ HOME_ACTIVITY_API_URL=https://100.77.226.26/api/home-network/activity-events
 HOME_ACTIVITY_HOST_HEADER=ops.heavisidetechnology.com
 ```
 
+### `HOME_ACTIVITY_INSECURE_TLS`
+
+**Optional** — Set to `1` only for trusted internal routes where the collector posts to an IP address but routes with a hostname header, causing a certificate hostname mismatch.
+
+```bash
+HOME_ACTIVITY_INSECURE_TLS=1
+```
+
 ### `HOME_ACTIVITY_LOOKBACK_MINUTES`
 
 **Optional** — Browser history lookback window for each collector run.
