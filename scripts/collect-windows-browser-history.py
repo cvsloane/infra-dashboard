@@ -35,6 +35,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Collect Windows browser history over SSH and ingest activity events.")
     parser.add_argument("--target", action="append", default=[], help="Target as LABEL=USER@HOST. Can be repeated.")
     parser.add_argument("--api-url", default=os.getenv("HOME_ACTIVITY_API_URL"), help="POST endpoint URL.")
+    parser.add_argument("--host-header", default=os.getenv("HOME_ACTIVITY_HOST_HEADER"), help="Optional Host header for internal reverse-proxy routes.")
     parser.add_argument("--token", default=os.getenv("HOME_ACTIVITY_INGEST_TOKEN") or os.getenv("HOME_NETWORK_INGEST_TOKEN"))
     parser.add_argument("--since-minutes", type=int, default=int(os.getenv("HOME_ACTIVITY_LOOKBACK_MINUTES", "1440")))
     parser.add_argument("--work-dir", default=None, help="Local work directory. Defaults to a temp directory.")
@@ -71,7 +72,7 @@ def main() -> int:
         if args.dry_run:
             print(json.dumps({"events": all_events, "errors": errors}, indent=2, sort_keys=True))
         else:
-            post_events(args.api_url, args.token, all_events)
+            post_events(args.api_url, args.token, all_events, args.host_header)
             print(json.dumps({"ok": True, "events": len(all_events), "errors": errors}, sort_keys=True))
     finally:
         if not args.keep_work_dir and not args.work_dir:
@@ -317,17 +318,20 @@ def extract_ai_service(domain: str) -> str | None:
     return ai_domains.get(domain)
 
 
-def post_events(api_url: str, token: str, events: list[dict[str, Any]]) -> None:
+def post_events(api_url: str, token: str, events: list[dict[str, Any]], host_header: str | None = None) -> None:
     for start in range(0, len(events), 500):
         payload = json.dumps({"events": events[start:start + 500]}).encode("utf-8")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if host_header:
+            headers["Host"] = host_header
         request = urllib.request.Request(
             api_url,
             data=payload,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         try:

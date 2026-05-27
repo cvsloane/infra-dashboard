@@ -368,6 +368,15 @@ HOME_ACTIVITY_DB_URL=postgresql://infra_dashboard:password@db-vps:5432/infra_das
 HOME_ACTIVITY_API_URL=https://infra.example.com/api/home-network/activity-events
 ```
 
+### `HOME_ACTIVITY_HOST_HEADER`
+
+**Optional** — Host header for internal reverse-proxy routes. For example, a collector on the Tailnet can post to an internal Traefik address while still routing as `ops.heavisidetechnology.com`.
+
+```bash
+HOME_ACTIVITY_API_URL=https://100.77.226.26/api/home-network/activity-events
+HOME_ACTIVITY_HOST_HEADER=ops.heavisidetechnology.com
+```
+
 ### `HOME_ACTIVITY_LOOKBACK_MINUTES`
 
 **Optional** — Browser history lookback window for each collector run.
