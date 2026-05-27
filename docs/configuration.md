@@ -9,6 +9,7 @@ Complete documentation for all environment variables in infra-dashboard. Use thi
 - [Alerting](#alerting) — Alertmanager firing alerts
 - [Redis / BullMQ](#redis--bullmq) — Queue monitoring and configuration storage
 - [NextDNS Log Capture](#nextdns-log-capture) — Per-device DNS log storage and child-device coverage alerts
+- [Home Activity Logging](#home-activity-logging) — Log-based browser activity ingestion for managed Windows laptops
 - [Uptime Kuma](#uptime-kuma) — External uptime monitoring
 - [Site Health](#site-health) — Health check exclusions
 - [Worker Supervisor](#worker-supervisor) — Worker health monitoring
@@ -336,6 +337,70 @@ npm run collect:nextdns
 ```
 
 The collector creates the tables from `db/nextdns-logs.sql` if they do not already exist, fetches recent logs idempotently, and prunes rows older than `NEXTDNS_LOG_RETENTION_DAYS`.
+
+---
+
+## Home Activity Logging
+
+These settings enable log-based endpoint activity storage for managed Windows laptops. This path intentionally avoids web portal scraping and TLS interception. It reads local endpoint logs such as browser History SQLite files, normalizes events, and posts them to infra-dashboard.
+
+### `HOME_ACTIVITY_INGEST_TOKEN`
+
+**Required for activity ingestion unless `HOME_NETWORK_INGEST_TOKEN` is reused** — Bearer token accepted by `POST /api/home-network/activity-events`.
+
+```bash
+HOME_ACTIVITY_INGEST_TOKEN=long-random-token
+```
+
+### `HOME_ACTIVITY_DB_URL`
+
+**Required unless `NEXTDNS_LOG_DB_URL` or `DATABASE_URL` is set** — PostgreSQL connection string for stored endpoint activity events.
+
+```bash
+HOME_ACTIVITY_DB_URL=postgresql://infra_dashboard:password@db-vps:5432/infra_dashboard
+```
+
+### `HOME_ACTIVITY_API_URL`
+
+**Required for the collector script** — Full URL for the activity ingestion endpoint.
+
+```bash
+HOME_ACTIVITY_API_URL=https://infra.example.com/api/home-network/activity-events
+```
+
+### `HOME_ACTIVITY_LOOKBACK_MINUTES`
+
+**Optional** — Browser history lookback window for each collector run.
+
+Default: `1440`
+
+### Collector Command
+
+Run from a Linux management host that can SSH to the Windows laptops. Password mode uses `sshpass` with `SSHPASS`; key auth works without `--sshpass`.
+
+```bash
+SSHPASS="$HOME_WINDOWS_HOMEADMIN_PASSWORD" \
+npm run collect:home-activity -- \
+  --sshpass \
+  --target joshua=homeadmin@192.168.109.223 \
+  --target norah=homeadmin@192.168.109.109
+```
+
+The collector copies Chrome and Edge History databases to a temporary Windows directory, downloads those copies, parses visit rows locally with Python `sqlite3`, posts normalized events, and removes the remote temporary copies. Events are idempotent through `source_event_id`.
+
+Stored event types include:
+
+- `search` for Google/Bing/Yahoo/DuckDuckGo/YouTube search URLs.
+- `youtube_video` for `youtube.com/watch?v=...`, `youtu.be/...`, and Shorts URLs.
+- `ai_usage` for known AI surfaces such as Gemini, Copilot, ChatGPT, and Claude.
+- `roblox_game` for browser URLs containing Roblox place IDs.
+- `web_visit` for other browser visits.
+
+Known limits:
+
+- HTTPS hides native app content from network logs. Exact prompts, video IDs, and search terms require endpoint logs or account export files.
+- Browser history captures browser activity, not native app activity.
+- If Chrome or Edge is running, copied SQLite snapshots can miss the last few seconds of activity, but the next run should catch durable rows.
 
 ---
 

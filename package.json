@@ -37,6 +37,7 @@
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
     "collect:nextdns": "tsx scripts/collect-nextdns-logs.ts --once",
+    "collect:home-activity": "python3 scripts/collect-windows-browser-history.py",
     "screenshots": "npx tsx scripts/screenshots.ts"
   },
   "dependencies": {
