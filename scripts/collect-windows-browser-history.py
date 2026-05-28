@@ -145,7 +145,13 @@ $results | ConvertTo-Json -Depth 4 -Compress
         })
 
     cleanup = "powershell.exe -NoProfile -Command \"Remove-Item -Recurse -Force C:\\ProgramData\\HomeActivityCollector\""
-    subprocess.run(ssh_command(target, [cleanup], use_sshpass), check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ssh_command(target, [cleanup], use_sshpass),
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=20,
+    )
     return snapshots
 
 
@@ -367,6 +373,7 @@ def run_ssh(target: str, remote_commands: list[str], use_sshpass: bool) -> str:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        timeout=45,
     )
     return result.stdout
 
@@ -378,6 +385,7 @@ def run_scp(source: str, destination: str, use_sshpass: bool) -> None:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        timeout=45,
     )
 
 
