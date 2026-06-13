@@ -302,7 +302,7 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
 
 def expected_ssids_for_role(role: str) -> set[str]:
     if role == "main":
-        return {"Heaviside", "Home-K", "HG-CORP"}
+        return {"Heaviside", "HG-CORP"}
     if role == "office":
         return {"Heaviside", "Home-K-Office"}
     if role == "school":

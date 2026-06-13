@@ -25,9 +25,12 @@
 # misc
 .DS_Store
 *.pem
+__pycache__/
+*.py[cod]
 CLAUDE.md
 project_status.md
 .claude/
+.antigravitycli/
 tasks/artifacts/
 
 # debug
