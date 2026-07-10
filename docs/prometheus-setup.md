@@ -347,6 +347,8 @@ The dashboard can surface backup freshness and restore drill recency if your `po
 
 The repo includes a node_exporter textfile collector and matching alerts in [`ops/backups/`](../ops/backups/). Install `restic-export-metrics.sh` on each backed-up host and attach the matching systemd drop-in as `ExecStopPost`. Prometheus then receives:
 
+The apps-vps drop-in also allows up to 48 hours for the first remote baseline because `/data`, `/opt`, `/root`, and stateful Docker volumes exceed 90 GB before deduplication. Keep the IO/nice limits from the service; later incremental runs should finish substantially faster.
+
 | Signal | Meaning |
 |--------|---------|
 | `heaviside_restic_backup_last_run_success` | `1` only when the most recent systemd run succeeded |
