@@ -124,9 +124,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     getViewModel: (data) => {
       if (!data) return { status: 'loading', primary: '—' };
       const primary = `WAL ${formatDurationShort(data.backups.walAgeSec)}`;
-      const secondary = `Logical ${formatDurationShort(data.backups.logicalAgeSec)} • Base ${formatDurationShort(
-        data.backups.basebackupAgeSec
-      )} • Drill ${formatDurationShort(data.backups.restoreDrillAgeSec)}`;
+      const secondary = data.backups.message;
 
       return { status: data.backups.status, primary, secondary };
     },

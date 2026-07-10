@@ -181,6 +181,18 @@ Use when your database runs on a separate server from your applications. This di
 
 ---
 
+### `METRICS_TOKEN`
+
+**Required in production** — Bearer token for `GET /metrics`, used by the Prometheus self-scrape. The endpoint fails closed when this value is missing.
+
+```bash
+METRICS_TOKEN=<random-secret-manager-value>
+```
+
+Prometheus may send either `Authorization: Bearer <token>` or `x-metrics-token: <token>`. Keep the token in a mode-600 file mounted into Prometheus; do not place it directly in `prometheus.yml`.
+
+---
+
 ## Alerting
 
 ### `ALERTMANAGER_URL`
@@ -507,6 +519,29 @@ DASHBOARD_PASSWORD=your-secure-password
 ```
 
 When set, users must authenticate before accessing any data. Sessions are stored in httpOnly cookies and expire after 7 days.
+
+### `DASHBOARD_SESSION_SECRET`
+
+**Required in production** — A random HMAC key kept separate from the login password.
+
+```bash
+DASHBOARD_SESSION_SECRET=<random-secret-manager-value>
+```
+
+If omitted, the app falls back to `DASHBOARD_PASSWORD` for compatibility. Production should always configure the separate key so password changes do not also become session-signing key changes.
+
+### Login rate limits
+
+Failed logins are tracked in Redis with both a per-client budget and a global credential budget. The global budget prevents spoofed forwarding headers on the direct-origin break-glass path from bypassing throttling.
+
+```bash
+AUTH_RATE_LIMIT_MAX_ATTEMPTS=5
+AUTH_RATE_LIMIT_WINDOW_SEC=900
+AUTH_GLOBAL_RATE_LIMIT_MAX_ATTEMPTS=30
+AUTH_GLOBAL_RATE_LIMIT_WINDOW_SEC=900
+```
+
+Rate-limit reads fail open if Redis is unavailable so incident access is not lost during a Redis outage. Cloudflare Access or another identity-aware proxy should remain the primary public access control; the dashboard password and throttles provide defense in depth and direct-origin break glass.
 
 **How it works:**
 1. User visits dashboard → Redirected to login page

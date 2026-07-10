@@ -175,6 +175,14 @@ export interface DashboardUpdate {
     logical: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null; bytes: number | null };
     basebackup: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null; checkedAgeSec: number | null };
     restoreDrill: { status: 'ok' | 'warning' | 'error' | 'unknown'; ageSec: number | null };
+    restic: Array<{
+      host: string;
+      job: string;
+      status: 'ok' | 'warning' | 'error' | 'unknown';
+      lastRunSuccess: number | null;
+      lastRunAgeSec: number | null;
+      lastSuccessAgeSec: number | null;
+    }>;
   } | null;
   queues?: Array<{
     name: string;

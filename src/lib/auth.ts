@@ -7,6 +7,7 @@
 
 import { cookies } from 'next/headers';
 import { COOKIE_MAX_AGE_SEC, createSessionToken, isValidSessionToken } from '@/lib/auth-token';
+import { secureCompare } from '@/lib/secure-compare';
 
 const COOKIE_NAME = 'infra-dashboard-session';
 
@@ -17,7 +18,7 @@ export function validatePassword(password: string): boolean {
     console.warn('DASHBOARD_PASSWORD not set - authentication disabled');
     return true; // Allow access if no password set
   }
-  return password === correctPassword;
+  return secureCompare(password, correctPassword);
 }
 
 // Check if current request is authenticated (for server components)

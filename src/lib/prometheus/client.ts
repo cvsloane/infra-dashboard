@@ -74,6 +74,15 @@ export interface PostgresBackupMetrics {
   restoreDrillAgeSeconds: number | null;
   walgBasebackupAgeSeconds: number | null;
   walgBasebackupLastCheckedAgeSeconds: number | null;
+  resticBackups: ResticBackupMetric[];
+}
+
+export interface ResticBackupMetric {
+  host: string;
+  job: string;
+  lastRunSuccess: number | null;
+  lastRunAgeSeconds: number | null;
+  lastSuccessAgeSeconds: number | null;
 }
 
 // API Client
@@ -169,6 +178,13 @@ function getOptionalValue(results: PrometheusResult[]): number | null {
   if (results.length === 0) return null;
   const val = parseFloat(results[0].value[1]);
   return Number.isFinite(val) ? val : null;
+}
+
+function getLabeledOptionalValue(results: PrometheusResult[], host: string): number | null {
+  const result = results.find((item) => item.metric.host === host);
+  if (!result) return null;
+  const value = parseFloat(result.value[1]);
+  return Number.isFinite(value) ? value : null;
 }
 
 function getSampleAgeSeconds(results: PrometheusResult[]): number | null {
@@ -371,6 +387,9 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       restoreDrillAge,
       walgBasebackupAge,
       walgBasebackupCheckedAge,
+      resticLastRunSuccess,
+      resticLastRunAge,
+      resticLastSuccessAge,
     ] = await Promise.all([
       queryPrometheus('max(pg_stat_archiver_seconds_since_last_wal)'),
       queryPrometheus('max(pg_backup_status_logical_backup_age_seconds)'),
@@ -378,7 +397,15 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       queryPrometheus('max(pg_backup_status_restore_drill_age_seconds)'),
       queryPrometheus('max(pg_backup_status_walg_basebackup_age_seconds)'),
       queryPrometheus('max(pg_backup_status_walg_basebackup_last_checked_age_seconds)'),
+      queryPrometheus('heaviside_restic_backup_last_run_success'),
+      queryPrometheus('time() - heaviside_restic_backup_last_run_timestamp_seconds'),
+      queryPrometheus('time() - heaviside_restic_backup_last_success_timestamp_seconds'),
     ]);
+
+    const resticHosts = new Map<string, string>();
+    for (const result of [...resticLastRunSuccess, ...resticLastRunAge, ...resticLastSuccessAge]) {
+      if (result.metric.host) resticHosts.set(result.metric.host, result.metric.backup_job || result.metric.host);
+    }
 
     return {
       walArchiveAgeSeconds: getOptionalValue(walArchiveAge),
@@ -387,6 +414,13 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       restoreDrillAgeSeconds: getOptionalValue(restoreDrillAge),
       walgBasebackupAgeSeconds: getOptionalValue(walgBasebackupAge),
       walgBasebackupLastCheckedAgeSeconds: getOptionalValue(walgBasebackupCheckedAge),
+      resticBackups: Array.from(resticHosts, ([host, job]) => ({
+        host,
+        job,
+        lastRunSuccess: getLabeledOptionalValue(resticLastRunSuccess, host),
+        lastRunAgeSeconds: getLabeledOptionalValue(resticLastRunAge, host),
+        lastSuccessAgeSeconds: getLabeledOptionalValue(resticLastSuccessAge, host),
+      })),
     };
   } catch (error) {
     console.error('Failed to get Postgres backup metrics:', error);
@@ -397,6 +431,7 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       restoreDrillAgeSeconds: null,
       walgBasebackupAgeSeconds: null,
       walgBasebackupLastCheckedAgeSeconds: null,
+      resticBackups: [],
     };
   }
 }

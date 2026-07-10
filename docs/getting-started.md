@@ -192,10 +192,13 @@ The container must be on the `coolify` network to resolve `coolify-db` as a host
 
 **Required:**
 - [ ] Set `DASHBOARD_PASSWORD` to a strong, unique password
+- [ ] Set a separate random `DASHBOARD_SESSION_SECRET`
+- [ ] Set `METRICS_TOKEN` before exposing or scraping `/metrics`
 - [ ] Enable HTTPS (via reverse proxy or Coolify's built-in SSL)
 - [ ] Keep `.env.local` out of version control (it's in `.gitignore` by default)
 
 **Recommended:**
+- [ ] Put the public hostname behind Cloudflare Access or another identity-aware proxy
 - [ ] Restrict dashboard access to VPN or internal network
 - [ ] Set up automated backups of your configuration
 - [ ] Rotate passwords periodically (quarterly recommended)

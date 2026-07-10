@@ -1,0 +1,32 @@
+groups:
+  - name: restic-backups
+    rules:
+      - alert: ResticBackupLastRunFailed
+        expr: heaviside_restic_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Restic backup failed on {{ $labels.host }}"
+          description: "The latest {{ $labels.backup_job }} systemd run failed. Inspect the service and /var/log/restic-backup.log before retrying."
+
+      - alert: ResticBackupStale
+        expr: heaviside_restic_backup_last_success_timestamp_seconds > 0 and (time() - heaviside_restic_backup_last_success_timestamp_seconds > 691200)
+        for: 10m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Restic backup is stale on {{ $labels.host }}"
+          description: "No successful {{ $labels.backup_job }} run has been recorded for more than eight days."
+
+      - alert: ResticBackupMetricsMissing
+        expr: absent(heaviside_restic_backup_last_run_success{host="apps-vps"}) or absent(heaviside_restic_backup_last_run_success{host="db-vps"})
+        for: 15m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Restic backup metrics are missing"
+          description: "The apps-vps or db-vps Restic textfile metric is missing from Prometheus."

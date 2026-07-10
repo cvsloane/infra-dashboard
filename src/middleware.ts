@@ -83,6 +83,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Prometheus authenticates at the route with METRICS_TOKEN.
+  if (pathname === '/metrics') {
+    return NextResponse.next();
+  }
+
   // Let API routes handle their own authentication (they return 401 instead of redirect)
   if (pathname.startsWith(API_PREFIX)) {
     return NextResponse.next();

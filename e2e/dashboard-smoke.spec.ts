@@ -111,6 +111,10 @@ async function mockDashboardApis(page: Page) {
       logical: { status: 'ok', ageSec: 120, bytes: 1234 },
       basebackup: { status: 'ok', ageSec: 300, checkedAgeSec: 60 },
       restoreDrill: { status: 'ok', ageSec: 600 },
+      restic: [
+        { host: 'apps-vps', job: 'apps-vps-restic', status: 'ok', lastRunSuccess: 1, lastRunAgeSec: 30, lastSuccessAgeSec: 30 },
+        { host: 'db-vps', job: 'db-vps-restic', status: 'ok', lastRunSuccess: 1, lastRunAgeSec: 30, lastSuccessAgeSec: 30 },
+      ],
     })
   );
   await page.route('**/api/alertmanager/alerts', (route) =>

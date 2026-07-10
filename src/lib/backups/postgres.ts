@@ -22,6 +22,10 @@ export const DEFAULT_BACKUP_THRESHOLDS = {
   // walg_basebackup_monitor runs daily; if the "checked" age is high, we can't trust basebackup freshness.
   basebackupCheckedWarnSec: 2 * 24 * 60 * 60,
   basebackupCheckedErrorSec: 7 * 24 * 60 * 60,
+
+  // Host-level Restic backups run weekly. Alert shortly before and at eight days.
+  resticWarnSec: 7.5 * 24 * 60 * 60,
+  resticErrorSec: 8 * 24 * 60 * 60,
 } as const;
 
 export interface PostgresBackupsSummary {
@@ -31,6 +35,14 @@ export interface PostgresBackupsSummary {
   logical: { status: BackupHealthStatus; ageSec: number | null; bytes: number | null };
   basebackup: { status: BackupHealthStatus; ageSec: number | null; checkedAgeSec: number | null };
   restoreDrill: { status: BackupHealthStatus; ageSec: number | null };
+  restic: Array<{
+    host: string;
+    job: string;
+    status: BackupHealthStatus;
+    lastRunSuccess: number | null;
+    lastRunAgeSec: number | null;
+    lastSuccessAgeSec: number | null;
+  }>;
   thresholds: typeof DEFAULT_BACKUP_THRESHOLDS;
   _raw: PostgresBackupMetrics;
 }
@@ -40,6 +52,18 @@ export function classifyAge(ageSec: number | null, warnSec: number, errorSec: nu
   if (ageSec >= errorSec) return 'error';
   if (ageSec >= warnSec) return 'warning';
   return 'ok';
+}
+
+export function classifyResticBackup(
+  lastRunSuccess: number | null,
+  lastSuccessAgeSec: number | null,
+  warnSec: number,
+  errorSec: number,
+): BackupHealthStatus {
+  if (lastRunSuccess === 0) return 'error';
+  if (lastRunSuccess === null || lastSuccessAgeSec === null) return 'unknown';
+  if (lastRunSuccess !== 1) return 'error';
+  return classifyAge(lastSuccessAgeSec, warnSec, errorSec);
 }
 
 export function worstStatus(statuses: BackupHealthStatus[]): BackupHealthStatus {
@@ -90,9 +114,34 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
   );
   const basebackupStatus = worstStatus([basebackupAgeStatus, basebackupCheckedStatus]);
 
-  const overall = worstStatus([logicalStatus, walStatus, basebackupStatus, restoreDrillStatus]);
+  const restic = ['apps-vps', 'db-vps'].map((host) => {
+    const metric = metrics.resticBackups.find((item) => item.host === host);
+    const lastRunSuccess = metric?.lastRunSuccess ?? null;
+    const lastSuccessAgeSec = metric?.lastSuccessAgeSeconds ?? null;
+    return {
+      host,
+      job: metric?.job ?? `${host}-restic`,
+      status: classifyResticBackup(
+        lastRunSuccess,
+        lastSuccessAgeSec,
+        thresholds.resticWarnSec,
+        thresholds.resticErrorSec,
+      ),
+      lastRunSuccess,
+      lastRunAgeSec: metric?.lastRunAgeSeconds ?? null,
+      lastSuccessAgeSec,
+    };
+  });
 
-  const message = `Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • WAL ${formatAge(metrics.walArchiveAgeSeconds)} • Base ${formatAge(metrics.walgBasebackupAgeSeconds)} • Drill ${formatAge(metrics.restoreDrillAgeSeconds)}`;
+  const overall = worstStatus([
+    logicalStatus,
+    walStatus,
+    basebackupStatus,
+    restoreDrillStatus,
+    ...restic.map((backup) => backup.status),
+  ]);
+
+  const message = `Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • WAL ${formatAge(metrics.walArchiveAgeSeconds)} • Base ${formatAge(metrics.walgBasebackupAgeSeconds)} • Drill ${formatAge(metrics.restoreDrillAgeSeconds)} • Restic apps ${formatAge(restic[0].lastSuccessAgeSec)} / db ${formatAge(restic[1].lastSuccessAgeSec)}`;
 
   return {
     status: overall,
@@ -105,8 +154,8 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
       checkedAgeSec: metrics.walgBasebackupLastCheckedAgeSeconds,
     },
     restoreDrill: { status: restoreDrillStatus, ageSec: metrics.restoreDrillAgeSeconds },
+    restic,
     thresholds,
     _raw: metrics,
   };
 }
-

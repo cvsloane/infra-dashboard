@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyAge, worstStatus, DEFAULT_BACKUP_THRESHOLDS } from './postgres';
+import { classifyAge, classifyResticBackup, worstStatus, DEFAULT_BACKUP_THRESHOLDS } from './postgres';
 
 describe('postgres backups helpers', () => {
   it('classifyAge returns unknown when metric missing', () => {
@@ -27,6 +27,15 @@ describe('postgres backups helpers', () => {
     expect(DEFAULT_BACKUP_THRESHOLDS.restoreDrillWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.restoreDrillErrorSec);
     expect(DEFAULT_BACKUP_THRESHOLDS.basebackupWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.basebackupErrorSec);
     expect(DEFAULT_BACKUP_THRESHOLDS.basebackupCheckedWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.basebackupCheckedErrorSec);
+    expect(DEFAULT_BACKUP_THRESHOLDS.resticWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.resticErrorSec);
+  });
+
+  it('classifies Restic backups from last-run result and successful snapshot age', () => {
+    expect(classifyResticBackup(null, null, 10, 20)).toBe('unknown');
+    expect(classifyResticBackup(0, null, 10, 20)).toBe('error');
+    expect(classifyResticBackup(0, 1, 10, 20)).toBe('error');
+    expect(classifyResticBackup(1, 5, 10, 20)).toBe('ok');
+    expect(classifyResticBackup(1, 10, 10, 20)).toBe('warning');
+    expect(classifyResticBackup(1, 20, 10, 20)).toBe('error');
   });
 });
-

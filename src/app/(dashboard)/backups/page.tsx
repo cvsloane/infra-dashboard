@@ -18,6 +18,14 @@ interface BackupsResponse {
   logical: { status: BackupStatus; ageSec: number | null; bytes: number | null };
   basebackup: { status: BackupStatus; ageSec: number | null; checkedAgeSec: number | null };
   restoreDrill: { status: BackupStatus; ageSec: number | null };
+  restic: Array<{
+    host: string;
+    job: string;
+    status: BackupStatus;
+    lastRunSuccess: number | null;
+    lastRunAgeSec: number | null;
+    lastSuccessAgeSec: number | null;
+  }>;
   thresholds: {
     walWarnSec: number;
     walErrorSec: number;
@@ -29,6 +37,8 @@ interface BackupsResponse {
     basebackupErrorSec: number;
     basebackupCheckedWarnSec: number;
     basebackupCheckedErrorSec: number;
+    resticWarnSec: number;
+    resticErrorSec: number;
   };
   _raw?: unknown;
 }
@@ -105,7 +115,7 @@ export default function BackupsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Backups</h1>
-        <p className="text-sm text-muted-foreground">Freshness for logical dumps, WAL archive, base backups, and restore drills.</p>
+        <p className="text-sm text-muted-foreground">Freshness for PostgreSQL recovery layers and host-level Restic backups.</p>
       </div>
 
       <StatusCard
@@ -183,6 +193,22 @@ export default function BackupsPage() {
                 <TableCell>{formatDurationLong(data?.thresholds.restoreDrillWarnSec)}</TableCell>
                 <TableCell>{formatDurationLong(data?.thresholds.restoreDrillErrorSec)}</TableCell>
               </TableRow>
+              {(data?.restic ?? []).map((backup) => (
+                <TableRow key={backup.host}>
+                  <TableCell className="font-medium">Restic · {backup.host}</TableCell>
+                  <TableCell>{statusBadge(backup.status)}</TableCell>
+                  <TableCell>
+                    <span title={`${backup.lastSuccessAgeSec ?? '—'}s`}>
+                      {formatDurationShort(backup.lastSuccessAgeSec)}
+                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      run {formatDurationShort(backup.lastRunAgeSec)}
+                    </span>
+                  </TableCell>
+                  <TableCell>{formatDurationLong(data?.thresholds.resticWarnSec)}</TableCell>
+                  <TableCell>{formatDurationLong(data?.thresholds.resticErrorSec)}</TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
 

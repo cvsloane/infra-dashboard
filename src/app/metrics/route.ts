@@ -1,18 +1,19 @@
 import { registry } from '@/lib/server/metrics';
+import { secureCompare } from '@/lib/secure-compare';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: Request): boolean {
   const expected = process.env.METRICS_TOKEN;
-  if (!expected) return true;
+  if (!expected) return false;
 
   const auth = request.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
-    return auth.slice('Bearer '.length) === expected;
+    return secureCompare(auth.slice('Bearer '.length), expected);
   }
 
-  return request.headers.get('x-metrics-token') === expected;
+  return secureCompare(request.headers.get('x-metrics-token') || '', expected);
 }
 
 export async function GET(request: Request) {
@@ -29,4 +30,3 @@ export async function GET(request: Request) {
     },
   });
 }
-

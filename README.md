@@ -57,7 +57,7 @@ npm run dev                 # http://localhost:3000
 | **🚀 Coolify Integration** | App status, deployment control, real-time build logs | Manage deployments without leaving the dashboard |
 | **📬 Queue Management** | BullMQ stats, worker health, bulk job actions | Fix failed jobs and monitor queue performance |
 | **🐘 PostgreSQL Monitoring** | Connection pools, PgBouncer stats, per-database metrics | Spot database bottlenecks before they impact users |
-| **🗄️ Database Backups** | Logical dump freshness, WAL archiving freshness, WAL-G base backup age, restore drill recency | Verify backups are current and restore procedures are exercised |
+| **🗄️ Backups** | Logical dumps, WAL, WAL-G, restore drills, and host-level Restic freshness | Verify both database recovery layers and encrypted host snapshots |
 | **🖥️ Server Metrics** | CPU, memory, disk, load averages | Understand resource usage across your infrastructure |
 | **🔍 Site Health** | HTTP status and SSL certificate checks | Know immediately when sites go down or certificates expire |
 | **⚙️ Worker Supervisor** | Systemd/PM2/Coolify worker health monitoring | Ensure background jobs are always running |
@@ -121,6 +121,8 @@ Mirror only the dashboard-relevant slice here: collector assumptions, health sem
 
 **Data flow:** The dashboard aggregates information from multiple sources. Coolify API provides application control, direct database queries enable real-time updates, Prometheus delivers metrics, and Redis powers queue monitoring.
 
+**Dependency security note:** `package.json` temporarily overrides Next.js's pinned PostCSS with a patched compatible release. Keep the override until Next ships the patched dependency directly; production build, browser smoke tests, and `npm audit` are the removal gates.
+
 ## API Reference
 
 ### Authentication
@@ -157,7 +159,8 @@ Mirror only the dashboard-relevant slice here: collector assumptions, health sem
 |----------|--------|-------------|
 | `/api/health` | GET | Basic health check (public, no auth required) |
 | `/api/postgres/health` | GET | PostgreSQL + PgBouncer metrics |
-| `/api/postgres/backups` | GET | PostgreSQL backup freshness (logical/WAL/base/drill) |
+| `/api/postgres/backups` | GET | PostgreSQL and Restic backup freshness |
+| `/metrics` | GET | Dashboard self-metrics; requires `METRICS_TOKEN` |
 | `/api/servers/status` | GET | VPS metrics and site health |
 | `/api/workers/status` | GET | Worker supervisor status (systemd/PM2/Coolify) |
 | `/api/home-network/dns-logs` | GET | Query stored NextDNS logs by device, status, time range, and domain search |
@@ -189,8 +192,10 @@ The dashboard is configured entirely through environment variables. See [`.env.e
 | `COOLIFY_API_URL` | Your Coolify API endpoint | Yes |
 | `COOLIFY_API_TOKEN` | API token for Coolify access | Yes |
 | `DASHBOARD_PASSWORD` | Protects the dashboard with authentication | Strongly recommended |
+| `DASHBOARD_SESSION_SECRET` | Separate HMAC key for session cookies | Yes in production |
+| `METRICS_TOKEN` | Bearer token for the Prometheus self-scrape | Yes in production |
 
-> **Security note:** Always set `DASHBOARD_PASSWORD` in production. Never commit credentials to version control.
+> **Security note:** Always set all three production secrets, keep them in a secret manager, and place the public hostname behind an identity-aware proxy such as Cloudflare Access. `/metrics` fails closed if its token is absent.
 
 ## Deployment
 

@@ -343,6 +343,35 @@ The dashboard can surface backup freshness and restore drill recency if your `po
 | WAL-G base backup age | `pg_backup_status_walg_basebackup_age_seconds` | Seconds since latest base backup (from `wal-g backup-list`) |
 | Base backup check age | `pg_backup_status_walg_basebackup_last_checked_age_seconds` | Seconds since the base backup monitor last ran |
 
+### Host-level Restic Freshness (Optional)
+
+The repo includes a node_exporter textfile collector and matching alerts in [`ops/backups/`](../ops/backups/). Install `restic-export-metrics.sh` on each backed-up host and attach the matching systemd drop-in as `ExecStopPost`. Prometheus then receives:
+
+| Signal | Meaning |
+|--------|---------|
+| `heaviside_restic_backup_last_run_success` | `1` only when the most recent systemd run succeeded |
+| `heaviside_restic_backup_last_run_timestamp_seconds` | Most recent run time |
+| `heaviside_restic_backup_last_success_timestamp_seconds` | Most recent successful snapshot time |
+
+Load `restic-alerts.yml` through Prometheus `rule_files`. The alerts cover a failed latest run, a successful snapshot older than eight days, and missing host metrics. A zero last-success timestamp is treated as bootstrap/failure—not as a 56-year-old stale backup.
+
+### Scrape Infra Dashboard Self-Metrics
+
+Set a random `METRICS_TOKEN` in the dashboard runtime, store the same value in a mode-600 Prometheus secret file, and configure a bearer-authenticated scrape:
+
+```yaml
+scrape_configs:
+  - job_name: infra-dashboard
+    metrics_path: /metrics
+    bearer_token_file: /etc/prometheus/secrets/infra-dashboard-metrics-token
+    # Use an internal Docker-discovered target or another path that does not
+    # traverse the interactive Cloudflare Access policy.
+    static_configs:
+      - targets: ['infra-dashboard:3000']
+```
+
+An unauthenticated request must return `401`; a request with the configured bearer token must return `200`.
+
 ### PgBouncer Panel
 
 | Metric | Source | Query |
