@@ -24,7 +24,12 @@ Rocket.Chat MongoDB has its own logical archive pipeline and retention policy.
 - Langfuse PostgreSQL metadata;
 - Postiz Temporal PostgreSQL.
 
-It also captures `/etc`, Coolify control-plane/proxy/SSH configuration, per-app env/Compose files, selected `/opt` service configuration, and the small WordPress files volume. The root-only staging set is checksummed before Restic encrypts and copies it to `heavisidelinux`.
+It also captures `/etc`, Coolify control-plane/proxy/SSH configuration, per-app env/Compose files, selected `/opt` service configuration, and the small WordPress files volume. The root-only staging set is checksummed before Restic encrypts it into two independent repositories:
+
+- `heavisidelinux` for a fast off-host copy;
+- private Amazon S3 bucket `heaviside-infrastructure-backups-609812247225-us-east-1`, prefix `apps-vps/`, for the geographically separate copy.
+
+Amazon access uses the bucket-scoped `apps-vps-restic` IAM user. Its access key, region, bucket name, and independent Restic password live in Bitwarden under `Infrastructure/APPS_VPS_RESTIC_*`; the root-only runtime files are `/etc/restic/apps-amazon.env` and `/etc/restic/apps-amazon.password`.
 
 The following are intentionally excluded:
 
@@ -43,8 +48,8 @@ The systemd service remains `apps-vps-restic-backup.service`; its success/freshn
 
 For a baseline or periodic drill:
 
-1. Run `restic check` against the repository.
-2. Restore the latest `apps-vps-data` snapshot to a temporary directory.
+1. Run `restic check` independently against both repositories.
+2. Restore the latest `apps-vps-data` snapshot from Amazon S3 to a temporary directory.
 3. Run `sha256sum -c SHA256SUMS` inside the restored staging directory.
 4. Load at least one restored logical dump into a matching disposable database version and run a substantive schema/data query.
 5. Remove the disposable database and restore directory.

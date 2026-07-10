@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source /etc/restic/apps.env
-
 readonly BACKUP_ROOT=/var/backups/apps-vps-data
 readonly TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly STAGE_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
@@ -91,9 +89,21 @@ gzip -t "${STAGE_DIR}/wordpress-files.tar.gz"
 )
 chmod -R go-rwx "${STAGE_DIR}"
 
-restic backup --tag apps-vps-data "${STAGE_DIR}"
-restic forget --prune --group-by host,tags --tag apps-vps-data \
-  --keep-daily 7 --keep-weekly 4 --keep-monthly 6
+backup_repository() {
+  local label="$1"
+  local env_file="$2"
+
+  echo "Backing up to ${label}"
+  # Each root-only file exports an independent repository, password, cache,
+  # hostname, and (for Amazon) bucket-scoped AWS credentials.
+  source "${env_file}"
+  restic backup --tag apps-vps-data "${STAGE_DIR}"
+  restic forget --prune --group-by host,tags --tag apps-vps-data \
+    --keep-daily 7 --keep-weekly 4 --keep-monthly 6
+}
+
+backup_repository "heavisidelinux" /etc/restic/apps.env
+backup_repository "Amazon S3" /etc/restic/apps-amazon.env
 
 # Keep two root-only local staging sets for fast recovery; Restic is the durable copy.
 mapfile -t old_stages < <(
