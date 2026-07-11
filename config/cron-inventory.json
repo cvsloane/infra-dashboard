@@ -160,8 +160,8 @@
     },
     {
       "match": { "host": "apps-vps", "source": "systemd-timer", "systemd_unit": "apps-vps-restic-backup.service" },
-      "name": "Restic Weekly Backup (apps-vps)",
-      "description": "Weekly restic backup of apps-vps data. Replaced /etc/cron.d/restic-weekly on 2026-04-27 after restoring disk headroom; old row is paused pending scheduled proof.",
+      "name": "Restic Daily Data Backup (apps-vps)",
+      "description": "Daily logical database and rebuild-state backup to independent encrypted repositories on heavisidelinux and Amazon S3.",
       "owner": "root",
       "tags": ["backup", "restic", "systemd"],
       "severity_if_missing": "high"

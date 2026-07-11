@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the apps-vps Amazon restore check monthly
+
+[Timer]
+OnCalendar=*-*-01 04:30:00 Europe/Berlin
+Persistent=true
+RandomizedDelaySec=15min
+Unit=apps-vps-amazon-restore-check.service
+
+[Install]
+WantedBy=timers.target

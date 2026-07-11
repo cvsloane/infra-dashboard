@@ -23,9 +23,11 @@ export const DEFAULT_BACKUP_THRESHOLDS = {
   basebackupCheckedWarnSec: 2 * 24 * 60 * 60,
   basebackupCheckedErrorSec: 7 * 24 * 60 * 60,
 
-  // Host-level Restic backups run weekly. Alert shortly before and at eight days.
-  resticWarnSec: 7.5 * 24 * 60 * 60,
-  resticErrorSec: 8 * 24 * 60 * 60,
+  // apps-vps is daily and dual-destination; db-vps remains a weekly secondary layer.
+  appsResticWarnSec: 36 * 60 * 60,
+  appsResticErrorSec: 48 * 60 * 60,
+  dbResticWarnSec: 7.5 * 24 * 60 * 60,
+  dbResticErrorSec: 8 * 24 * 60 * 60,
 } as const;
 
 export interface PostgresBackupsSummary {
@@ -42,6 +44,8 @@ export interface PostgresBackupsSummary {
     lastRunSuccess: number | null;
     lastRunAgeSec: number | null;
     lastSuccessAgeSec: number | null;
+    warnSec: number;
+    errorSec: number;
   }>;
   thresholds: typeof DEFAULT_BACKUP_THRESHOLDS;
   _raw: PostgresBackupMetrics;
@@ -64,6 +68,19 @@ export function classifyResticBackup(
   if (lastRunSuccess === null || lastSuccessAgeSec === null) return 'unknown';
   if (lastRunSuccess !== 1) return 'error';
   return classifyAge(lastSuccessAgeSec, warnSec, errorSec);
+}
+
+export function resticThresholdsForHost(host: string): { warnSec: number; errorSec: number } {
+  if (host === 'apps-vps') {
+    return {
+      warnSec: DEFAULT_BACKUP_THRESHOLDS.appsResticWarnSec,
+      errorSec: DEFAULT_BACKUP_THRESHOLDS.appsResticErrorSec,
+    };
+  }
+  return {
+    warnSec: DEFAULT_BACKUP_THRESHOLDS.dbResticWarnSec,
+    errorSec: DEFAULT_BACKUP_THRESHOLDS.dbResticErrorSec,
+  };
 }
 
 export function worstStatus(statuses: BackupHealthStatus[]): BackupHealthStatus {
@@ -118,18 +135,21 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
     const metric = metrics.resticBackups.find((item) => item.host === host);
     const lastRunSuccess = metric?.lastRunSuccess ?? null;
     const lastSuccessAgeSec = metric?.lastSuccessAgeSeconds ?? null;
+    const { warnSec, errorSec } = resticThresholdsForHost(host);
     return {
       host,
       job: metric?.job ?? `${host}-restic`,
       status: classifyResticBackup(
         lastRunSuccess,
         lastSuccessAgeSec,
-        thresholds.resticWarnSec,
-        thresholds.resticErrorSec,
+        warnSec,
+        errorSec,
       ),
       lastRunSuccess,
       lastRunAgeSec: metric?.lastRunAgeSeconds ?? null,
       lastSuccessAgeSec,
+      warnSec,
+      errorSec,
     };
   });
 

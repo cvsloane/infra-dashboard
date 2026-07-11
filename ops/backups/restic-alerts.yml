@@ -11,14 +11,24 @@ groups:
           summary: "Restic backup failed on {{ $labels.host }}"
           description: "The latest {{ $labels.backup_job }} systemd run failed. Inspect the service and /var/log/restic-backup.log before retrying."
 
-      - alert: ResticBackupStale
-        expr: heaviside_restic_backup_last_success_timestamp_seconds > 0 and (time() - heaviside_restic_backup_last_success_timestamp_seconds > 691200)
+      - alert: ResticDailyBackupStale
+        expr: heaviside_restic_backup_last_success_timestamp_seconds{backup_job="apps-vps-restic"} > 0 and (time() - heaviside_restic_backup_last_success_timestamp_seconds{backup_job="apps-vps-restic"} > 172800)
         for: 10m
         labels:
           severity: critical
           service: backups
         annotations:
-          summary: "Restic backup is stale on {{ $labels.host }}"
+          summary: "Daily Restic backup is stale on {{ $labels.host }}"
+          description: "No successful {{ $labels.backup_job }} run has been recorded for more than 48 hours."
+
+      - alert: ResticWeeklyBackupStale
+        expr: heaviside_restic_backup_last_success_timestamp_seconds{backup_job="db-vps-restic"} > 0 and (time() - heaviside_restic_backup_last_success_timestamp_seconds{backup_job="db-vps-restic"} > 691200)
+        for: 10m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Weekly Restic backup is stale on {{ $labels.host }}"
           description: "No successful {{ $labels.backup_job }} run has been recorded for more than eight days."
 
       - alert: ResticBackupMetricsMissing
@@ -30,3 +40,33 @@ groups:
         annotations:
           summary: "Restic backup metrics are missing"
           description: "The apps-vps or db-vps Restic textfile metric is missing from Prometheus."
+
+      - alert: AmazonRestoreCheckLastRunFailed
+        expr: heaviside_restic_restore_check_last_run_success{restore_job="apps-vps-amazon-restore"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Amazon backup restore check failed on {{ $labels.host }}"
+          description: "The latest Amazon snapshot restore, checksum, or Coolify database load check failed. Inspect apps-vps-amazon-restore-check.service and /var/log/restic-restore-check.log."
+
+      - alert: AmazonRestoreCheckStale
+        expr: heaviside_restic_restore_check_last_success_timestamp_seconds{restore_job="apps-vps-amazon-restore"} > 0 and (time() - heaviside_restic_restore_check_last_success_timestamp_seconds{restore_job="apps-vps-amazon-restore"} > 3024000)
+        for: 10m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Amazon backup restore check is stale"
+          description: "No successful Amazon restore check has been recorded for more than 35 days."
+
+      - alert: AmazonRestoreCheckMetricsMissing
+        expr: absent(heaviside_restic_restore_check_last_run_success{restore_job="apps-vps-amazon-restore",host="apps-vps"})
+        for: 15m
+        labels:
+          severity: critical
+          service: backups
+        annotations:
+          summary: "Amazon restore-check metrics are missing"
+          description: "The apps-vps monthly Amazon restore-check metric is missing from Prometheus."

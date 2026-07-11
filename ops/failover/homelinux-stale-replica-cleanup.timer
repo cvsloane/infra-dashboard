@@ -1,0 +1,10 @@
+[Unit]
+Description=Review the stale PostgreSQL replica after its 30-day retention
+
+[Timer]
+OnCalendar=2026-08-10 03:00:00 America/New_York
+Persistent=true
+Unit=homelinux-stale-replica-cleanup.service
+
+[Install]
+WantedBy=timers.target

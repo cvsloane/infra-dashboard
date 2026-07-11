@@ -6,6 +6,7 @@ readonly TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly STAGE_DIR="${BACKUP_ROOT}/${TIMESTAMP}"
 readonly DATABASE_DIR="${STAGE_DIR}/databases"
 readonly CONFIG_LIST="${STAGE_DIR}/config-files.list"
+readonly AMAZON_LOCK=/run/lock/apps-vps-amazon-restic.lock
 
 install -d -m 0700 -o root -g root "${BACKUP_ROOT}" "${STAGE_DIR}" "${DATABASE_DIR}"
 
@@ -36,11 +37,12 @@ dump_mysql_cluster() {
   require_container "${container}"
   echo "Dumping MySQL/MariaDB cluster: ${container}"
   docker exec "${container}" sh -ec '
+    export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
     if command -v mariadb-dump >/dev/null 2>&1; then
-      exec mariadb-dump --protocol=socket --user=root --password="$MYSQL_ROOT_PASSWORD" \
+      exec mariadb-dump --protocol=socket --user=root \
         --single-transaction --quick --routines --events --all-databases
     fi
-    exec mysqldump --protocol=socket --user=root --password="$MYSQL_ROOT_PASSWORD" \
+    exec mysqldump --protocol=socket --user=root \
       --single-transaction --quick --routines --events --all-databases
   ' | gzip -1 > "${DATABASE_DIR}/${output_name}.sql.gz"
   gzip -t "${DATABASE_DIR}/${output_name}.sql.gz"
@@ -89,21 +91,32 @@ gzip -t "${STAGE_DIR}/wordpress-files.tar.gz"
 )
 chmod -R go-rwx "${STAGE_DIR}"
 
-backup_repository() {
+backup_repository() (
   local label="$1"
   local env_file="$2"
+  local lock_file="${3:-}"
 
   echo "Backing up to ${label}"
   # Each root-only file exports an independent repository, password, cache,
   # hostname, and (for Amazon) bucket-scoped AWS credentials.
-  source "${env_file}"
-  restic backup --tag apps-vps-data "${STAGE_DIR}"
+  source "${env_file}" || exit 1
+  if [[ -n "${lock_file}" ]]; then
+    exec 8>"${lock_file}"
+    flock -w 1800 8 || exit 1
+  fi
+  restic backup --tag apps-vps-data "${STAGE_DIR}" || exit 1
   restic forget --prune --group-by host,tags --tag apps-vps-data \
-    --keep-daily 7 --keep-weekly 4 --keep-monthly 6
-}
+    --keep-daily 7 --keep-weekly 4 --keep-monthly 6 || exit 1
+)
 
-backup_repository "heavisidelinux" /etc/restic/apps.env
-backup_repository "Amazon S3" /etc/restic/apps-amazon.env
+local_status=0
+amazon_status=0
+backup_repository "heavisidelinux" /etc/restic/apps.env || local_status=$?
+backup_repository "Amazon S3" /etc/restic/apps-amazon.env "${AMAZON_LOCK}" || amazon_status=$?
+if (( local_status != 0 || amazon_status != 0 )); then
+  echo "Backup destination failure: heavisidelinux=${local_status} amazon=${amazon_status}" >&2
+  exit 1
+fi
 
 # Keep two root-only local staging sets for fast recovery; Restic is the durable copy.
 mapfile -t old_stages < <(

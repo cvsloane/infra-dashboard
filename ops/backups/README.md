@@ -42,7 +42,7 @@ The following are intentionally excluded:
 - Postiz Elasticsearch;
 - raw Docker database volumes.
 
-The systemd service remains `apps-vps-restic-backup.service`; its success/freshness metrics are exported to node_exporter and monitored by Prometheus and the dashboard.
+The daily systemd service remains `apps-vps-restic-backup.service`; `apps-vps-restic-backup.timer` runs it at 03:00 `Europe/Berlin` time with up to ten minutes of jitter. Each destination runs in an isolated environment and Amazon is still attempted if `heavisidelinux` fails. Amazon backup and restore operations share a bounded repository lock. Success/freshness metrics are exported to node_exporter and monitored by Prometheus and the dashboard. The apps job warns after 36 hours and becomes critical after 48 hours; the separate weekly `db-vps` Restic job retains its eight-day threshold.
 
 ## Restore proof
 
@@ -54,4 +54,10 @@ For a baseline or periodic drill:
 4. Load at least one restored logical dump into a matching disposable database version and run a substantive schema/data query.
 5. Remove the disposable database and restore directory.
 
+`apps-vps-amazon-restore-check.timer` repeats this Amazon proof monthly on the first day at 04:30 `Europe/Berlin` time with up to fifteen minutes of jitter. It runs `restic check`, restores and verifies every checksummed artifact, loads the Coolify dump into a disposable PostgreSQL 15 container, requires a non-empty public schema, removes the temporary data, and publishes separate restore-check telemetry. Prometheus alerts on a failed run, missing telemetry, or no success within 35 days.
+
 The 2026-07-10 baseline restored all protected archives and loaded the Coolify dump into PostgreSQL 15, where the restored `coolify` database contained 64 public tables.
+
+## Verified replica rollback retention
+
+The pre-reseed HomeLinux PostgreSQL directory is retained through 2026-08-10. The one-shot `homelinux-stale-replica-cleanup.timer` then verifies that the stale and active paths remain distinct, the replica container still mounts the active path, and its WAL receiver is streaming. It does not delete automatically because the replica parent is operator-writable; fresh human approval is required after the retention review. `homelinux-stale-replica-cleanup --check` performs the same safety checks before the eligibility date.

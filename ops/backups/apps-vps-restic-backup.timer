@@ -1,0 +1,11 @@
+[Unit]
+Description=Run apps-vps data backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Berlin
+Persistent=true
+RandomizedDelaySec=10min
+Unit=apps-vps-restic-backup.service
+
+[Install]
+WantedBy=timers.target

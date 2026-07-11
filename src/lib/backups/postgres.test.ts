@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { classifyAge, classifyResticBackup, worstStatus, DEFAULT_BACKUP_THRESHOLDS } from './postgres';
+import {
+  classifyAge,
+  classifyResticBackup,
+  worstStatus,
+  DEFAULT_BACKUP_THRESHOLDS,
+  resticThresholdsForHost,
+} from './postgres';
 
 describe('postgres backups helpers', () => {
   it('classifyAge returns unknown when metric missing', () => {
@@ -27,7 +33,19 @@ describe('postgres backups helpers', () => {
     expect(DEFAULT_BACKUP_THRESHOLDS.restoreDrillWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.restoreDrillErrorSec);
     expect(DEFAULT_BACKUP_THRESHOLDS.basebackupWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.basebackupErrorSec);
     expect(DEFAULT_BACKUP_THRESHOLDS.basebackupCheckedWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.basebackupCheckedErrorSec);
-    expect(DEFAULT_BACKUP_THRESHOLDS.resticWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.resticErrorSec);
+    expect(DEFAULT_BACKUP_THRESHOLDS.appsResticWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.appsResticErrorSec);
+    expect(DEFAULT_BACKUP_THRESHOLDS.dbResticWarnSec).toBeLessThan(DEFAULT_BACKUP_THRESHOLDS.dbResticErrorSec);
+  });
+
+  it('uses daily thresholds for apps-vps and weekly thresholds for db-vps', () => {
+    expect(resticThresholdsForHost('apps-vps')).toEqual({
+      warnSec: 36 * 60 * 60,
+      errorSec: 48 * 60 * 60,
+    });
+    expect(resticThresholdsForHost('db-vps')).toEqual({
+      warnSec: 7.5 * 24 * 60 * 60,
+      errorSec: 8 * 24 * 60 * 60,
+    });
   });
 
   it('classifies Restic backups from last-run result and successful snapshot age', () => {

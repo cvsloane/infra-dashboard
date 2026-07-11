@@ -25,6 +25,8 @@ interface BackupsResponse {
     lastRunSuccess: number | null;
     lastRunAgeSec: number | null;
     lastSuccessAgeSec: number | null;
+    warnSec: number;
+    errorSec: number;
   }>;
   thresholds: {
     walWarnSec: number;
@@ -37,8 +39,6 @@ interface BackupsResponse {
     basebackupErrorSec: number;
     basebackupCheckedWarnSec: number;
     basebackupCheckedErrorSec: number;
-    resticWarnSec: number;
-    resticErrorSec: number;
   };
   _raw?: unknown;
 }
@@ -115,7 +115,7 @@ export default function BackupsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Backups</h1>
-        <p className="text-sm text-muted-foreground">Freshness for PostgreSQL recovery layers and host-level Restic backups.</p>
+        <p className="text-sm text-muted-foreground">Freshness for PostgreSQL recovery layers and encrypted data backups.</p>
       </div>
 
       <StatusCard
@@ -205,8 +205,8 @@ export default function BackupsPage() {
                       run {formatDurationShort(backup.lastRunAgeSec)}
                     </span>
                   </TableCell>
-                  <TableCell>{formatDurationLong(data?.thresholds.resticWarnSec)}</TableCell>
-                  <TableCell>{formatDurationLong(data?.thresholds.resticErrorSec)}</TableCell>
+                  <TableCell>{formatDurationLong(backup.warnSec)}</TableCell>
+                  <TableCell>{formatDurationLong(backup.errorSec)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

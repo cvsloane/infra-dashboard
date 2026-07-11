@@ -1,0 +1,16 @@
+[Unit]
+Description=Review the expired verified-reseed rollback replica for cleanup
+Documentation=file:/usr/local/sbin/homelinux-stale-replica-cleanup
+ConditionPathIsDirectory=/home/cvsloane/postgres-replica/data.stale-20260710T215925Z
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/homelinux-stale-replica-cleanup
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
