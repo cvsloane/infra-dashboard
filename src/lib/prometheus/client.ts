@@ -85,6 +85,41 @@ export interface ResticBackupMetric {
   lastSuccessAgeSeconds: number | null;
 }
 
+export type LocalAIGpuLeaseState =
+  | 'ready'
+  | 'in-use'
+  | 'queued'
+  | 'inhibited'
+  | 'stale'
+  | 'offline';
+
+export interface LocalAIGpuLeaseHost {
+  host: 'homelinux' | 'heavisidelinux';
+  state: LocalAIGpuLeaseState;
+  authorityUp: boolean;
+  owner: {
+    workload: string;
+    kind: string;
+  } | null;
+  acquiredAt: string | null;
+  acquiredAgeSeconds: number | null;
+  mediaWaiting: boolean;
+  inhibited: boolean;
+  staleOwner: boolean;
+  metricsAgeSeconds: number | null;
+}
+
+export interface LocalAIGpuLeaseSnapshot {
+  fetchedAt: string;
+  hosts: LocalAIGpuLeaseHost[];
+  summary: {
+    healthy: number;
+    active: number;
+    queued: number;
+    problems: number;
+  };
+}
+
 // API Client
 class PrometheusApiError extends Error {
   constructor(
@@ -552,4 +587,83 @@ export async function getAllVPSMetrics(): Promise<{ appsVps: VPSMetrics | null; 
   ]);
 
   return { appsVps, dbVps };
+}
+
+const LOCAL_AI_HOSTS = ['homelinux', 'heavisidelinux'] as const;
+
+function localAiResultForHost(results: PrometheusResult[], host: string): PrometheusResult | undefined {
+  return results.find((result) => result.metric.host === host);
+}
+
+function localAiBoolean(results: PrometheusResult[], host: string): boolean {
+  const result = localAiResultForHost(results, host);
+  return Boolean(result && Number(result.value[1]) === 1);
+}
+
+export async function getLocalAIGpuLeaseStatus(): Promise<LocalAIGpuLeaseSnapshot> {
+  const [authority, owners, acquired, mediaWaiting, inhibited, staleOwners] = await Promise.all([
+    queryPrometheus('local_ai_gpu_lease_up'),
+    queryPrometheus('local_ai_gpu_lease_owner'),
+    queryPrometheus('local_ai_gpu_lease_acquired_timestamp_seconds'),
+    queryPrometheus('local_ai_gpu_lease_media_waiting'),
+    queryPrometheus('local_ai_gpu_lease_inhibited'),
+    queryPrometheus('local_ai_gpu_lease_stale_owner'),
+  ]);
+
+  const nowSeconds = Date.now() / 1000;
+  const hosts = LOCAL_AI_HOSTS.map((host): LocalAIGpuLeaseHost => {
+    const authorityResult = localAiResultForHost(authority, host);
+    const authorityUp = Boolean(authorityResult && Number(authorityResult.value[1]) === 1);
+    const ownerResult = owners.find(
+      (result) => result.metric.host === host && Number(result.value[1]) === 1
+    );
+    const acquiredResult = localAiResultForHost(acquired, host);
+    const acquiredTimestamp = acquiredResult ? Number(acquiredResult.value[1]) : 0;
+    const hostMediaWaiting = localAiBoolean(mediaWaiting, host);
+    const hostInhibited = localAiBoolean(inhibited, host);
+    const hostStaleOwner = localAiBoolean(staleOwners, host);
+
+    let state: LocalAIGpuLeaseState = 'ready';
+    if (!authorityUp) state = 'offline';
+    else if (hostStaleOwner) state = 'stale';
+    else if (hostInhibited) state = 'inhibited';
+    else if (hostMediaWaiting) state = 'queued';
+    else if (ownerResult) state = 'in-use';
+
+    return {
+      host,
+      state,
+      authorityUp,
+      owner: ownerResult
+        ? {
+            workload: ownerResult.metric.workload || 'unknown',
+            kind: ownerResult.metric.kind || 'unknown',
+          }
+        : null,
+      acquiredAt: acquiredTimestamp > 0 ? new Date(acquiredTimestamp * 1000).toISOString() : null,
+      acquiredAgeSeconds:
+        acquiredTimestamp > 0 ? Math.max(0, Math.round(nowSeconds - acquiredTimestamp)) : null,
+      mediaWaiting: hostMediaWaiting,
+      inhibited: hostInhibited,
+      staleOwner: hostStaleOwner,
+      metricsAgeSeconds: authorityResult
+        ? Math.max(0, Math.round(nowSeconds - authorityResult.value[0]))
+        : null,
+    };
+  });
+
+  return {
+    fetchedAt: new Date(Date.now()).toISOString(),
+    hosts,
+    summary: {
+      healthy: hosts.filter(
+        (host) => host.authorityUp && !host.inhibited && !host.staleOwner
+      ).length,
+      active: hosts.filter((host) => host.owner !== null).length,
+      queued: hosts.filter((host) => host.mediaWaiting).length,
+      problems: hosts.filter(
+        (host) => !host.authorityUp || host.inhibited || host.staleOwner
+      ).length,
+    },
+  };
 }

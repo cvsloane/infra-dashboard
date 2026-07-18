@@ -5,6 +5,7 @@ import {
   Bot,
   CalendarClock,
   Database,
+  Cpu,
   Home,
   LayoutDashboard,
   Rocket,
@@ -40,6 +41,7 @@ export const navGroups: DashboardNavGroup[] = [
     label: 'Infrastructure',
     items: [
       { name: 'Servers', href: '/servers', icon: Server },
+      { name: 'Local AI', href: '/local-ai', icon: Cpu },
       { name: 'Home Network', href: '/home-network', icon: Home },
       { name: 'Deployments', href: '/coolify', icon: Rocket },
       { name: 'Database', href: '/postgres', icon: Database },
@@ -61,6 +63,7 @@ export const navGroups: DashboardNavGroup[] = [
 export const dashboardKeyboardShortcuts: KeyboardShortcutDefinition[] = [
   { id: 'go-home', keys: ['g', 'h'], description: 'Go to overview', href: '/' },
   { id: 'go-servers', keys: ['g', 's'], description: 'Go to servers', href: '/servers' },
+  { id: 'go-local-ai', keys: ['g', 'i'], description: 'Go to Local AI', href: '/local-ai' },
   { id: 'go-home-network', keys: ['g', 'n'], description: 'Go to home network', href: '/home-network' },
   { id: 'go-coolify', keys: ['g', 'c'], description: 'Go to deployments', href: '/coolify' },
   { id: 'go-postgres', keys: ['g', 'p'], description: 'Go to database', href: '/postgres' },
