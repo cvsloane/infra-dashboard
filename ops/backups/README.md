@@ -18,11 +18,11 @@ Rocket.Chat MongoDB has its own logical archive pipeline and retention policy.
 `apps-vps-data-backup.sh` creates logical dumps for:
 
 - Coolify PostgreSQL;
-- FreeScout MariaDB;
 - the retained `hg-wp` MySQL cluster;
 - the active WordPress MySQL cluster;
-- Langfuse PostgreSQL metadata;
 - Postiz Temporal PostgreSQL.
+
+FreeScout and Langfuse were retired by the operator on 2026-09-12 and are no longer required dump sources. Missing live database containers still fail the backup.
 
 It also captures `/etc`, Coolify control-plane/proxy/SSH configuration, per-app env/Compose files, selected `/opt` service configuration, and the small WordPress files volume. The root-only staging set is checksummed before Restic encrypts it into two independent repositories:
 

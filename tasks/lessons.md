@@ -65,3 +65,11 @@
 - Dashboard-facing Coolify capacity should distinguish `server_settings.concurrent_builds` from Horizon worker process capacity. `homelinux` build concurrency comes from Coolify DB, while the deployment worker pool comes from the Coolify container env (`HORIZON_MAX_PROCESSES`) and must be mirrored into infra-dashboard env (`COOLIFY_DEPLOYMENT_WORKERS_*`) if the UI displays it.
 - During active development incidents, do not drop Coolify `server_settings.concurrent_builds` to 1 unless the operator explicitly accepts a deploy freeze. Prefer 2 as the temporary pressure-relief floor for `apps-vps`/`localhost`; keep `homelinux` higher, around 4+, when it is the intended primary build server and is reachable.
 - Do not assume a staging app is an acceptable validation target for platform changes. Confirm whether the intended production policy is `production-only` first; if staging should be retired, validate against production configuration without keeping a live staging app around.
+
+- 2026-09-12: Service inventory retirement recommendations must distinguish production from staging and verify cross-application dependencies. Chris confirmed Documenso is used by HG Websites; keep it as a required service. A staging name or low usage sample does not establish retirement eligibility.
+
+- 2026-09-12: Chris confirmed Agency Financials and PPC remain live; keep their applications and workers. Reporting and Comms were never materially used and have been fused into HOS. Inventory reviews must distinguish those user-confirmed statuses from generic consolidation assumptions. MainWP at wp.heavisidetechnology.com has 47 registered sites; do not classify it as disposable generic WordPress.
+
+- 2026-09-12: Chris is not hiring: keep Heaviside Group job openings unpublished and careers screening cron paused until explicitly resumed. Stop a notification at its producer when its webhook is shared with another live workflow (careers webhook is also used by quiz leads).
+
+- 2026-09-12: When retiring a service, inspect backup dump lists as well as schedulers and alerts. FreeScout/Langfuse retirement left required dump calls in apps-vps Restic, causing the next daily backup to abort. Remove only approved retired targets and exercise the full backup path.
