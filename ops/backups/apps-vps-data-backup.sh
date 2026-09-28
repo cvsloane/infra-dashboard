@@ -51,10 +51,8 @@ dump_mysql_cluster() {
 # Recovery-critical control plane and business application databases.
 # Nextcloud is intentionally excluded by operator decision.
 dump_postgres_cluster coolify-db coolify-postgres
-dump_mysql_cluster freescout-db freescout-mariadb
 dump_mysql_cluster hg-wp-mysql hg-wordpress-mysql
 dump_mysql_cluster mysql-g0o040wk8gw0g0gwooccw0cc wordpress-mysql
-dump_postgres_cluster langfuse-postgres-1 langfuse-postgres
 dump_postgres_cluster postiz-temporal-postgresql postiz-temporal-postgres
 
 # Capture only rebuild configuration, not application source trees, registries,
