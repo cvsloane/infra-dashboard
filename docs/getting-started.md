@@ -26,7 +26,7 @@ Before you begin, ensure you have the following installed and accessible:
 
 | Requirement | Version | Purpose | Required? |
 |-------------|---------|---------|-----------|
-| **Node.js** | 18+ | Required for Next.js 16 | ✅ Yes |
+| **Node.js** | 22.23.4+ | Required for Next.js 16 | ✅ Yes |
 | **npm** | 9+ | Package management | ✅ Yes |
 | **Coolify** | Latest | Application management platform | ✅ Yes |
 | **Git** | Any | Clone the repository | ✅ Yes |
@@ -38,7 +38,7 @@ Before you begin, ensure you have the following installed and accessible:
 ### Checking Your Versions
 
 ```bash
-# Verify Node.js version (should be 18 or higher)
+# Verify Node.js version (should be 22.23.4 or higher)
 node --version
 
 # Verify npm version
