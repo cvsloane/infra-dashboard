@@ -3,7 +3,7 @@
 [![CI](https://github.com/cvsloane/infra-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/cvsloane/infra-dashboard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/cvsloane/infra-dashboard)](https://github.com/cvsloane/infra-dashboard/releases)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.23.4-brightgreen)](https://nodejs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **Your infrastructure, visible and actionable.**
@@ -47,7 +47,7 @@ npm install
 npm run dev                 # http://localhost:3000
 ```
 
-**Prerequisites:** Node.js 18+, npm 9+, and a Coolify instance to connect to.
+**Prerequisites:** Node.js 22.23.4+, npm 9+, and a Coolify instance to connect to.
 
 ## Features
 
