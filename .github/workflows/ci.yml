@@ -19,6 +19,9 @@ jobs:
           node-version: '22.23.4'
           cache: 'npm'
 
+      - name: Test DNS-cap collector notices
+        run: python3 -m unittest discover -s scripts -p test_collect_home_network.py -v
+
       - name: Install dependencies
         run: npm ci
 
