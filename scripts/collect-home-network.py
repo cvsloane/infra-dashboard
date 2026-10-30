@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import ipaddress
 import os
 import re
 import subprocess
@@ -14,6 +15,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROUTERS = [
@@ -31,6 +33,11 @@ EXPECTED_KIDS_SUBNETS = {
 
 DEFAULT_ROUTER_LOG_DIR = Path("/var/lib/home-network-monitor/router-logs")
 DEFAULT_ROUTER_LOG_POLL_MAX_AGE_SEC = 300
+# DNS guard and NextDNS fallback: SloaneVault "90 - System/93 - AI Scripts/home-network/dns-guard/".
+MONITORING_ALERT = Path(os.environ.get("MONITORING_ALERT_BIN", str(Path.home() / ".local/bin/monitoring-alert")))
+DNS_CAP_STATE = Path(os.environ.get("HOME_NETWORK_DNS_CAP_STATE", "/var/lib/home-network-monitor/dns-cap-notices.json"))
+ROUTER_TIMEZONE = ZoneInfo("America/New_York")
+DNS_GUARD_HOSTS = [{"hostname": "homelinux", "ssh": None}, {"hostname": "heavisidelinux", "ssh": "cvsloane@100.67.212.40"}]
 
 REMOTE_SCRIPT = r"""
 echo __SECTION__:hostname
@@ -65,6 +72,14 @@ for dev in $(iwinfo 2>/dev/null | awk '/ESSID:/ {print $1}'); do
 done
 echo __SECTION__:internet_ping
 ping -c 3 -W 2 1.1.1.1 2>/dev/null || true
+echo __SECTION__:dns_fallback
+/usr/sbin/dns-fallback status 2>/dev/null || true
+echo __SECTION__:dns_guard
+grep -o 'Mode [a-z]*' /etc/dns-guard.nft 2>/dev/null || true
+nft list chain inet dns_guard over 2>/dev/null | grep -o 'packets [0-9]*' || true
+for set in over4 over6; do nft list set inet dns_guard $set 2>/dev/null | tr -d '\n' | grep -o 'elements = {[^}]*}' || true; done
+echo __SECTION__:dns_guard_log
+TZ=UTC0 logread -e 'dns-guard over cap:' || true
 echo __SECTION__:logread_tail
 logread | tail -n 80 2>/dev/null || true
 """
@@ -87,6 +102,7 @@ def main() -> int:
 
     if args.post_url:
         post_snapshot(args.post_url, args.token, snapshot)
+    send_dns_alerts(snapshot)
 
     print(json.dumps({"status": snapshot["status"], "routers": len(snapshot["routers"]), "clients": len(snapshot["clients"])}))
     return 0
@@ -127,6 +143,8 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
     if any((r.get("nextdns") or {}).get("running") is False for r in router_rows):
         status = "error"
 
+    dns_guard_hosts = check_dns_guard_hosts()
+    monitoring_warnings.extend(f"{row['hostname']} DNS guard log unreadable" for row in dns_guard_hosts if not row["checked"])
     windows_laptop_snapshot = load_windows_laptop_snapshot()
     monitoring_warnings.extend(windows_laptop_snapshot.pop("monitoring_warnings", []))
 
@@ -143,6 +161,7 @@ def collect_snapshot(routers: list[dict[str, str]]) -> dict[str, Any]:
             "kids_profile": KIDS_NEXTDNS_PROFILE,
             "routers": dns_rows,
         },
+        "dns_guard_hosts": dns_guard_hosts,
         "warnings": sorted(set(warnings)),
         "monitoring_warnings": sorted(set(monitoring_warnings)),
         **windows_laptop_snapshot,
@@ -263,7 +282,17 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
     persist_router_log_tail(hostname, logread_tail)
     event_summary = parse_logread_events(logread_tail)
     radios, clients = parse_wifi_sections(hostname, role, sections)
+    dns_guard = parse_dns_guard(section_text(sections, "dns_fallback"), section_text(sections, "dns_guard"))
+    fallback = dns_guard["fallback"] or {}
+    if fallback.get("mode") == "fallback" and not fallback.get("dry_run"):
+        warnings.append(f"{hostname} DNS fallback active since {fallback.get('since')}: NextDNS not answering, Cloudflare for Families in use")
+    # The 24-hour cap set is activity history, not evidence of degraded DNS health.
     leases = parse_dhcp_leases(section_text(sections, "dhcp_leases"))
+    # logread renders stored timestamps in UTC for this dedicated section.
+    # Do not mix in older local-time log files, which are ambiguous at DST fall-back.
+    dns_guard["cap_events"] = parse_dns_cap_events(
+        section_text(sections, "dns_guard_log"), dns_guard["over_cap_devices"], leases
+    )
     merge_leases(clients, leases)
 
     if nextdns.get("running") is False:
@@ -293,6 +322,7 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
         "kids": kids,
         "internet_ping": ping,
         "nextdns": nextdns,
+        "dns_guard": dns_guard,
         "event_summary": event_summary,
         "radios": radios,
         "warnings": warnings,
@@ -415,6 +445,176 @@ def validate_nextdns_policy(hostname: str, nextdns: dict[str, Any]) -> list[str]
         if not has_kids_mapping:
             warnings.append(f"{hostname} missing Kids Strict NextDNS mapping for {expected_subnet}")
     return warnings
+
+
+def parse_dns_guard(fallback_raw: str, guard_raw: str) -> dict[str, Any]:
+    """The router's fallback watchdog state and its per-device DNS caps; None means not installed."""
+    try:
+        fallback = json.loads(fallback_raw) if fallback_raw.strip().startswith("{") else None
+    except json.JSONDecodeError:
+        fallback = None
+    packets = match_text(r"packets (\d+)", guard_raw)
+    devices = sorted(set(re.findall(r"([0-9.]{7,15}|[0-9a-f:]{3,39}) timeout", guard_raw)))
+    return {"fallback": fallback, "guard_mode": match_text(r"Mode ([a-z]+)", guard_raw),
+            "over_cap_packets": int(packets) if packets else None, "over_cap_devices": devices}
+
+
+def check_dns_guard_hosts() -> list[dict[str, Any]]:
+    """Kernel-log hits of each Linux machine's own NextDNS cap in the last two minutes."""
+    rows = []
+    for host in DNS_GUARD_HOSTS:
+        command = ["journalctl", "-k", "--since", "-2min", "--no-pager", "-q", "-g", "dns-guard-host over cap"]
+        if host["ssh"]:
+            command = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", host["ssh"], "journalctl -k --since -2min --no-pager -q -g 'dns-guard-host over cap'"]
+        try:
+            proc = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            rows.append({"hostname": host["hostname"], "checked": False, "over_cap_events": None})
+            continue
+        # journalctl exits 1 when nothing matches.
+        rows.append({"hostname": host["hostname"], "checked": proc.returncode in (0, 1),
+                     "over_cap_events": sum(1 for line in proc.stdout.splitlines() if line.strip())})
+    return rows
+
+
+def send_dns_alerts(snapshot: dict[str, Any]) -> None:
+    """Keep outage alerts stateful; report timestamped router cap episodes as notices."""
+    if os.environ.get("HOME_NETWORK_ALERTS", "1") == "0" or not MONITORING_ALERT.exists():
+        return
+    alerts = []
+    for row in snapshot["routers"]:
+        guard = row.get("dns_guard")
+        if not guard:
+            continue
+        name = row["hostname"]
+        fallback = guard.get("fallback") or {}
+        if fallback.get("mode") == "fallback" and not fallback.get("dry_run"):
+            alerts.append((f"dns-fallback-{name}", "fail", f"{name}: NextDNS stopped answering, so the router switched to Cloudflare for Families at {fallback.get('since')}. Kids' NextDNS app blocks and school mode are paused until it switches back."))
+        else:
+            alerts.append((f"dns-fallback-{name}", "ok", f"{name}: back on NextDNS."))
+    for host in snapshot.get("dns_guard_hosts", []):
+        if host.get("over_cap_events"):
+            alerts.append((f"dns-guard-host-{host['hostname']}", "fail", f"{host['hostname']}: its own traffic to NextDNS went over the cap; a bulk lookup job may be running."))
+        elif host.get("checked"):
+            alerts.append((f"dns-guard-host-{host['hostname']}", "ok", f"{host['hostname']}: NextDNS traffic back under the cap."))
+    for key, state, message in alerts:
+        try:
+            subprocess.run([str(MONITORING_ALERT), key, state, message], capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+    send_dns_cap_notices(snapshot)
+
+
+def parse_dns_cap_events(
+    raw: str, devices: list[str], leases: dict[str, dict[str, str]]
+) -> list[dict[str, str]]:
+    """Latest sampled event per device from the dedicated UTC logread section."""
+    wanted = {str(ipaddress.ip_address(address)) for address in devices}
+    names = {str(ipaddress.ip_address(row["ip"])): row.get("hostname", "") for row in leases.values()}
+    latest: dict[str, dict[str, str]] = {}
+    for line in raw.splitlines():
+        if "dns-guard over cap:" not in line:
+            continue
+        source = re.search(r"\bSRC=(\S+)", line)
+        if not source:
+            continue
+        stamp = line.split(" kern.", 1)[0]
+        try:
+            address = str(ipaddress.ip_address(source[1]))
+            observed = dt.datetime.strptime(stamp, "%a %b %d %H:%M:%S %Y").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            continue
+        if address not in wanted:
+            continue
+        observed_at = observed.astimezone(dt.timezone.utc).isoformat()
+        if address not in latest or observed_at > latest[address]["observed_at"]:
+            latest[address] = {
+                "address": address,
+                "device_name": names.get(address) or address,
+                "observed_at": observed_at,
+            }
+    return [latest[address] for address in sorted(latest)]
+
+
+def dns_cap_message(row: dict[str, Any], event: dict[str, str]) -> tuple[str, str]:
+    guard = row["dns_guard"]
+    contained = guard.get("guard_mode") == "enforce"
+    title = "DNS burst contained" if contained else "DNS burst observed"
+    name = " ".join(event["device_name"].split()).replace("@", "@\u200b")
+    device = name if name == event["address"] else f"{name} ({event['address']})"
+    observed = dt.datetime.fromisoformat(event["observed_at"]).astimezone(ROUTER_TIMEZONE)
+    message = f"{device} on {row['hostname']}; observed {observed:%b %d, %I:%M:%S %p %Z}. "
+    message += "Excess DNS traffic was blocked. " if contained else "The guard is in log-only mode. "
+    fallback = guard.get("fallback") or {}
+    if fallback.get("mode") == "fallback" and not fallback.get("dry_run"):
+        message += "DNS is using the backup service."
+    elif (row.get("nextdns") or {}).get("running") is True:
+        message += "NextDNS is running."
+    else:
+        message += "NextDNS health is not confirmed."
+    return title, message
+
+
+def send_dns_cap_notices(snapshot: dict[str, Any], *, seed: bool = False) -> None:
+    """One notice per observed activity episode; quiet polls end it without a recovery.
+
+    The minute collector and sampled packet logs define an episode: continuing
+    events or a rising router drop counter extend it silently. A successful poll
+    with an unchanged counter and no new events ends it. Collection failures do
+    not imply quiet. Delivery failures retain the original pending notice.
+    """
+    state = json.loads(DNS_CAP_STATE.read_text()) if DNS_CAP_STATE.exists() else {"routers": {}}
+    for row in snapshot["routers"]:
+        guard = row.get("dns_guard")
+        if not row.get("reachable") or not guard:
+            continue
+        router = state["routers"].setdefault(row["hostname"], {"devices": {}})
+        devices = router["devices"]
+        counter = guard.get("over_cap_packets")
+        events = {event["address"]: event for event in guard.get("cap_events", [])}
+        fresh = {
+            address: event for address, event in events.items()
+            if event["observed_at"] > devices.get(address, {}).get("seen_at", "")
+        }
+        previous_counter = router.get("counter")
+        quiet = isinstance(counter, int) and counter == previous_counter and not fresh
+        reset = isinstance(counter, int) and isinstance(previous_counter, int) and counter < previous_counter
+        if quiet or reset:
+            for device in devices.values():
+                device["active"] = False
+        for address, event in fresh.items():
+            device = devices.setdefault(address, {"active": False})
+            if not seed and not device["active"] and not device.get("pending"):
+                title, message = dns_cap_message(row, event)
+                device["pending"] = {"title": title, "message": message, "observed_at": event["observed_at"]}
+            device["seen_at"] = event["observed_at"]
+            device["active"] = not seed
+        router["counter"] = counter
+        # Save the pending episode before delivery; native later polls retry it
+        # unchanged after a failed send or interrupted collector.
+        write_dns_cap_state(state)
+        if not seed:
+            for device in devices.values():
+                pending = device.get("pending")
+                if not pending:
+                    continue
+                result = subprocess.run(
+                    [str(MONITORING_ALERT), pending["title"], "notice", pending["message"]],
+                    capture_output=True, timeout=30,
+                )
+                if result.returncode == 0:
+                    device["delivered_at"] = pending["observed_at"]
+                    del device["pending"]
+                    write_dns_cap_state(state)
+
+
+def write_dns_cap_state(state: dict[str, Any]) -> None:
+    DNS_CAP_STATE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = DNS_CAP_STATE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    temporary.replace(DNS_CAP_STATE)
 
 
 def parse_ping(raw: str) -> dict[str, Any]:
