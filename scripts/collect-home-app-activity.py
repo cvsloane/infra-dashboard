@@ -7,16 +7,17 @@ import argparse,base64,datetime as dt,gzip,hashlib,json,os,pathlib,re,shlex,subp
 def powershell(script: str) -> str:
     data=base64.b64encode(gzip.compress(script.encode())).decode()
     wrapper="$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false);$m=New-Object IO.MemoryStream(,[Convert]::FromBase64String('"+data+"'));$g=New-Object IO.Compression.GzipStream($m,[IO.Compression.CompressionMode]::Decompress);$r=New-Object IO.StreamReader($g);& ([scriptblock]::Create($r.ReadToEnd()))"
-    return 'powershell.exe -NoProfile -NonInteractive -EncodedCommand '+base64.b64encode(wrapper.encode('utf-16le')).decode()
+    return 'powershell.exe -NoProfile -EncodedCommand '+base64.b64encode(wrapper.encode('utf-16le')).decode()
 
 
 def ssh(args, target, script):
     cmd=['ssh','-F',args.ssh_config,'-o','BatchMode=yes','-o','ConnectTimeout=6']
     if args.jump:cmd+=['-J',args.jump]
     cmd+=[target,powershell(script)]
-    result=subprocess.run(cmd,capture_output=True,text=True,encoding='utf-8-sig',timeout=110)
+    result=subprocess.run(cmd,capture_output=True,text=True,encoding='utf-8-sig',timeout=30)
     if result.returncode:raise RuntimeError(result.stderr.strip()[:300] or f'SSH exit {result.returncode}')
-    return json.loads(result.stdout.strip()) if result.stdout.strip() else None
+    if not result.stdout.strip():raise RuntimeError('SSH command returned no structured response')
+    return json.loads(result.stdout.strip())
 
 
 def resolve_games(events, cache):
