@@ -62,15 +62,23 @@ def main():
         report={'child':d['child'],'device_id':d['device_id']}
         try:
             if args.install:
-                content=base64.b64encode(agent.encode()).decode()
+                prepare="$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine '"+d['device_id']+"'){throw 'Unexpected computer identity; installation refused'};New-Item -ItemType Directory -Force 'C:\\ProgramData\\HomeActivityMonitor'|Out-Null;ConvertTo-Json -InputObject @{ready=$true} -Compress"
+                ssh(args,d['target'],prepare)
+                copy=['scp','-F',args.ssh_config,'-o','BatchMode=yes','-o','ConnectTimeout=6']
+                if args.jump:copy+=['-J',args.jump]
+                copy+=[str(pathlib.Path(__file__).with_suffix('.ps1')),d['target']+':C:/ProgramData/HomeActivityMonitor/collect-home-app-activity.ps1']
+                copied=subprocess.run(copy,capture_output=True,text=True,timeout=45)
+                if copied.returncode:raise RuntimeError('Collector transfer failed: '+copied.stderr.strip()[:200])
+                digest=hashlib.sha256(agent.encode()).hexdigest()
                 install="""$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine 'DEVICE'){throw 'Unexpected computer identity; installation refused'};$root='C:\\ProgramData\\HomeActivityMonitor';New-Item -ItemType Directory -Force $root | Out-Null
-[IO.File]::WriteAllBytes($root+'\\collect-home-app-activity.ps1',[Convert]::FromBase64String('CONTENT'))
-$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -File C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1 -Child CHILD -Persist'
+if((Get-FileHash ($root+'\\collect-home-app-activity.ps1') -Algorithm SHA256).Hash -ine 'DIGEST'){throw 'Collector checksum mismatch'}
+$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1 -Child CHILD -Persist'
 $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
 $settings=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 3)
 Register-ScheduledTask -TaskName 'Home Activity Monitor' -Action $action -Trigger $trigger -Settings $settings -User SYSTEM -RunLevel Highest -Force | Out-Null
-& ($root+'\\collect-home-app-activity.ps1') -Child CHILD -Persist -SinceHours HOURS
-""".replace('DEVICE',d['device_id']).replace('CHILD',d['child']).replace('HOURS',str(args.since_hours)).replace('CONTENT',content)
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ($root+'\\collect-home-app-activity.ps1') -Child CHILD -Persist -SinceHours HOURS
+if($LASTEXITCODE -ne 0){throw 'Initial collector execution failed'}
+""".replace('DEVICE',d['device_id']).replace('CHILD',d['child']).replace('HOURS',str(args.since_hours)).replace('DIGEST',digest)
                 installed=ssh(args,d['target'],install)
                 report['installed']=installed
                 report['ok']=installed.get('ok') is True
