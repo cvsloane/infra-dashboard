@@ -62,14 +62,15 @@ def main():
         report={'child':d['child'],'device_id':d['device_id']}
         try:
             if args.install:
-                prepare="$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine '"+d['device_id']+"'){throw 'Unexpected computer identity; installation refused'};New-Item -ItemType Directory -Force 'C:\\ProgramData\\HomeActivityMonitor'|Out-Null;ConvertTo-Json -InputObject @{ready=$true} -Compress"
-                ssh(args,d['target'],prepare)
+                prepare="$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine '"+d['device_id']+"'){throw 'Unexpected computer identity; installation refused'};New-Item -ItemType Directory -Force 'C:\\ProgramData\\HomeActivityMonitor'|Out-Null;ConvertTo-Json -InputObject @{ready=$true;hash=$(if(Test-Path 'C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1'){(Get-FileHash 'C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1' -Algorithm SHA256).Hash}else{''})} -Compress"
+                ready=ssh(args,d['target'],prepare)
                 copy=['scp','-F',args.ssh_config,'-o','BatchMode=yes','-o','ConnectTimeout=6']
                 if args.jump:copy+=['-J',args.jump]
                 copy+=[str(pathlib.Path(__file__).with_suffix('.ps1')),d['target']+':C:/ProgramData/HomeActivityMonitor/collect-home-app-activity.ps1']
-                copied=subprocess.run(copy,capture_output=True,text=True,timeout=45)
-                if copied.returncode:raise RuntimeError('Collector transfer failed: '+copied.stderr.strip()[:200])
                 digest=hashlib.sha256(agent.encode()).hexdigest()
+                if str(ready.get('hash','')).lower()!=digest:
+                    copied=subprocess.run(copy,capture_output=True,text=True,timeout=45)
+                    if copied.returncode:raise RuntimeError('Collector transfer failed: '+copied.stderr.strip()[:200])
                 install="""$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine 'DEVICE'){throw 'Unexpected computer identity; installation refused'};$root='C:\\ProgramData\\HomeActivityMonitor';New-Item -ItemType Directory -Force $root | Out-Null
 if((Get-FileHash ($root+'\\collect-home-app-activity.ps1') -Algorithm SHA256).Hash -ine 'DIGEST'){throw 'Collector checksum mismatch'}
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1 -Child CHILD -Persist'
