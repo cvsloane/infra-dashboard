@@ -6,7 +6,9 @@ type Enrollment = { child: string; key_hash: string };
 export function authenticateActivityDevice(device: string, key: string, configuration: string | undefined): Enrollment | null {
   if (!configuration || !device || !key) return null;
   try {
-    const enrollment = (JSON.parse(configuration) as Record<string, Enrollment>)[device];
+    const entries = JSON.parse(configuration) as Record<string, Enrollment>;
+    const enrollments = Object.fromEntries(Object.entries(entries).map(([name, value]) => [name.toUpperCase(), value]));
+    const enrollment = enrollments[device.toUpperCase()];
     if (!enrollment || !/^[a-z][a-z0-9-]*$/.test(enrollment.child) || !/^[a-f0-9]{64}$/.test(enrollment.key_hash)) return null;
     return secureCompare(createHash('sha256').update(key).digest('hex'), enrollment.key_hash) ? enrollment : null;
   } catch { return null; }

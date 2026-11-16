@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const device = request.headers.get('x-home-device') || '';
+  const device = (request.headers.get('x-home-device') || '').toUpperCase();
   const auth = request.headers.get('authorization') || '';
   const enrollment = authenticateActivityDevice(device, auth.startsWith('Bearer ') ? auth.slice(7) : '', process.env.HOME_ACTIVITY_DEVICE_KEYS);
   if (!enrollment) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

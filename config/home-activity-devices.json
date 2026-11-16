@@ -3,42 +3,49 @@
     "child": "norah",
     "device_id": "NORAH-LAPTOP",
     "target": "homeadmin@192.168.109.109",
-    "jump": "root@192.168.8.246"
+    "jump": "root@192.168.8.246",
+    "mac": "70:08:94:96:02:45"
   },
   {
     "child": "joshua",
     "device_id": "JOSHUA-LAPTOP",
     "target": "homeadmin@192.168.109.223",
-    "jump": "root@192.168.8.246"
+    "jump": "root@192.168.8.246",
+    "mac": "30:03:c8:16:59:21"
   },
   {
     "child": "luke",
     "device_id": "LUKE-LAPTOP",
     "target": "homeadmin@192.168.109.117",
-    "jump": "root@192.168.8.246"
+    "jump": "root@192.168.8.246",
+    "mac": "70:08:94:a1:69:af"
   },
   {
     "child": "caroline",
     "device_id": "CAROLINE-LAPTOP",
     "target": "homeadmin@192.168.109.129",
-    "jump": "root@192.168.8.246"
+    "jump": "root@192.168.8.246",
+    "mac": "30:03:c8:15:22:27"
   },
   {
     "child": "chloe",
     "device_id": "CHLOE-LAPTOP",
     "target": "homeadmin@192.168.109.178",
-    "jump": "root@192.168.8.246"
+    "jump": "root@192.168.8.246",
+    "mac": "50:3d:d1:29:ed:74"
   },
   {
     "child": "olivia",
     "device_id": "OLIVIA-LAPTOP",
     "target": "homeadmin@192.168.110.199",
-    "jump": "root@192.168.8.113"
+    "jump": "root@192.168.8.113",
+    "mac": "74:12:b3:d4:73:c5"
   },
   {
     "child": "joseph",
-    "device_id": "JBsGamingPC",
-    "target": "homeadmin@192.168.8.206",
-    "jump": "root@192.168.8.113"
+    "device_id": "JBSGAMINGPC",
+    "target": "homeadmin@192.168.110.206",
+    "jump": "root@192.168.8.113",
+    "mac": "60:dd:8e:d6:5f:38"
   }
 ]

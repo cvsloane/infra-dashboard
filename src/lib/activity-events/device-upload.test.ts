@@ -10,6 +10,11 @@ describe('scoped device upload', () => {
     expect(authenticateActivityDevice('JOSHUA-LAPTOP', 'test-key', config)).toBeNull();
     expect(authenticateActivityDevice('NORAH-LAPTOP', 'test-key', config)?.child).toBe('norah');
   });
+  it('matches Windows computer names regardless of stored capitalization', () => {
+    const legacy = JSON.stringify({ JBsGamingPC: { child: 'joseph', key_hash: createHash('sha256').update('test-key').digest('hex') } });
+    expect(authenticateActivityDevice('JBSGAMINGPC', 'test-key', legacy)?.child).toBe('joseph');
+    expect(authenticateActivityDevice('JBSGAMINGPC', 'wrong', legacy)).toBeNull();
+  });
   it('rejects cross-child and cross-device attribution', () => {
     expect(parseDeviceActivity({ events: [{ ...event, child: 'joseph' }] }, 'NORAH-LAPTOP', 'norah')).toBeNull();
     expect(parseDeviceActivity({ events: [event] }, 'JOSHUA-LAPTOP', 'norah')).toBeNull();
