@@ -42,6 +42,7 @@ export interface HomeActivityEventFilters {
   device?: string;
   source?: string;
   eventType?: string;
+  verified?: boolean;
   app?: string;
   domain?: string;
   search?: string;

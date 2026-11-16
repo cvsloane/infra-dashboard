@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     }
 
     const result = await queryHomeActivityEvents({
+      verified: url.searchParams.get('verified') === '1',
       child: optionalParam(url, 'child'),
       device: optionalParam(url, 'device'),
       source: optionalParam(url, 'source'),
