@@ -66,12 +66,14 @@ def main():
                 ready=ssh(args,d['target'],prepare)
                 copy=['scp','-F',args.ssh_config,'-o','BatchMode=yes','-o','ConnectTimeout=6']
                 if args.jump:copy+=['-J',args.jump]
-                copy+=[str(pathlib.Path(__file__).with_suffix('.ps1')),d['target']+':C:/ProgramData/HomeActivityMonitor/collect-home-app-activity.ps1']
+                copy+=[str(pathlib.Path(__file__).with_suffix('.ps1')),d['target']+':C:/Users/homeadmin/collect-home-app-activity.upload.ps1']
                 digest=hashlib.sha256(agent.encode()).hexdigest()
                 if str(ready.get('hash','')).lower()!=digest:
                     copied=subprocess.run(copy,capture_output=True,text=True,timeout=45)
                     if copied.returncode:raise RuntimeError('Collector transfer failed: '+copied.stderr.strip()[:200])
                 install="""$ErrorActionPreference='Stop';if($env:COMPUTERNAME -ine 'DEVICE'){throw 'Unexpected computer identity; installation refused'};$root='C:\\ProgramData\\HomeActivityMonitor';New-Item -ItemType Directory -Force $root | Out-Null
+$staged='C:\\Users\\homeadmin\\collect-home-app-activity.upload.ps1'
+if(Test-Path $staged){if((Get-FileHash $staged -Algorithm SHA256).Hash -ine 'DIGEST'){throw 'Staged collector checksum mismatch'};Move-Item -LiteralPath $staged -Destination ($root+'\\collect-home-app-activity.ps1') -Force}
 if((Get-FileHash ($root+'\\collect-home-app-activity.ps1') -Algorithm SHA256).Hash -ine 'DIGEST'){throw 'Collector checksum mismatch'}
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\\ProgramData\\HomeActivityMonitor\\collect-home-app-activity.ps1 -Child CHILD -Persist'
 $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
