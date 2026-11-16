@@ -156,6 +156,7 @@ export async function queryHomeActivityEvents(filters: HomeActivityEventFilters)
   const limit = clampLimit(filters.limit);
   const where: string[] = [];
   const params: Array<string | number> = [];
+  if (filters.verified) where.push("metadata->>'collector_version' = '2'");
 
   addParam(where, params, 'source =', filters.source);
   addParam(where, params, 'event_type =', filters.eventType);

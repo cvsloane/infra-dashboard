@@ -1,0 +1,44 @@
+[
+  {
+    "child": "norah",
+    "device_id": "NORAH-LAPTOP",
+    "target": "homeadmin@192.168.109.109",
+    "jump": "root@192.168.8.246"
+  },
+  {
+    "child": "joshua",
+    "device_id": "JOSHUA-LAPTOP",
+    "target": "homeadmin@192.168.109.223",
+    "jump": "root@192.168.8.246"
+  },
+  {
+    "child": "luke",
+    "device_id": "LUKE-LAPTOP",
+    "target": "homeadmin@192.168.109.117",
+    "jump": "root@192.168.8.246"
+  },
+  {
+    "child": "caroline",
+    "device_id": "CAROLINE-LAPTOP",
+    "target": "homeadmin@192.168.109.129",
+    "jump": "root@192.168.8.246"
+  },
+  {
+    "child": "chloe",
+    "device_id": "CHLOE-LAPTOP",
+    "target": "homeadmin@192.168.109.178",
+    "jump": "root@192.168.8.246"
+  },
+  {
+    "child": "olivia",
+    "device_id": "OLIVIA-LAPTOP",
+    "target": "homeadmin@192.168.110.199",
+    "jump": "root@192.168.8.113"
+  },
+  {
+    "child": "joseph",
+    "device_id": "JBsGamingPC",
+    "target": "homeadmin@192.168.8.206",
+    "jump": "root@192.168.8.113"
+  }
+]

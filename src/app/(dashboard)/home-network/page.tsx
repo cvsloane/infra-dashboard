@@ -8,6 +8,7 @@ import { HomeNetworkSummary } from '@/components/home-network/HomeNetworkSummary
 import { RouterTable } from '@/components/home-network/RouterTable';
 import { ClientAssociations } from '@/components/home-network/ClientAssociations';
 import { DnsPolicyPanel } from '@/components/home-network/DnsPolicyPanel';
+import { HomeActivityPanel } from '@/components/home-network/HomeActivityPanel';
 import { NextDnsLogsPanel } from '@/components/home-network/NextDnsLogsPanel';
 import { WarningsPanel } from '@/components/home-network/WarningsPanel';
 import { WindowsLaptopPanel } from '@/components/home-network/WindowsLaptopPanel';
@@ -113,6 +114,7 @@ export default function HomeNetworkPage() {
         <WarningsPanel warnings={data.computed_warnings.length > 0 ? data.computed_warnings : ['No snapshot has been ingested yet.']} />
       )}
 
+      <HomeActivityPanel />
       <NextDnsLogsPanel />
     </div>
   );
