@@ -33,9 +33,9 @@ export const DEFAULT_BACKUP_THRESHOLDS = {
 export interface PostgresBackupsSummary {
   status: BackupHealthStatus;
   message: string;
-  wal: { status: BackupHealthStatus; ageSec: number | null };
+  wal: { enabled: false; status: BackupHealthStatus; ageSec: number | null };
   logical: { status: BackupHealthStatus; ageSec: number | null; bytes: number | null };
-  basebackup: { status: BackupHealthStatus; ageSec: number | null; checkedAgeSec: number | null };
+  basebackup: { enabled: false; status: BackupHealthStatus; ageSec: number | null; checkedAgeSec: number | null };
   restoreDrill: { status: BackupHealthStatus; ageSec: number | null };
   restic: Array<{
     host: string;
@@ -111,25 +111,12 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
   const thresholds = DEFAULT_BACKUP_THRESHOLDS;
   const metrics = await getPostgresBackupMetrics();
 
-  const walStatus = classifyAge(metrics.walArchiveAgeSeconds, thresholds.walWarnSec, thresholds.walErrorSec);
   const logicalStatus = classifyAge(metrics.logicalBackupAgeSeconds, thresholds.logicalWarnSec, thresholds.logicalErrorSec);
   const restoreDrillStatus = classifyAge(
     metrics.restoreDrillAgeSeconds,
     thresholds.restoreDrillWarnSec,
     thresholds.restoreDrillErrorSec
   );
-
-  const basebackupAgeStatus = classifyAge(
-    metrics.walgBasebackupAgeSeconds,
-    thresholds.basebackupWarnSec,
-    thresholds.basebackupErrorSec
-  );
-  const basebackupCheckedStatus = classifyAge(
-    metrics.walgBasebackupLastCheckedAgeSeconds,
-    thresholds.basebackupCheckedWarnSec,
-    thresholds.basebackupCheckedErrorSec
-  );
-  const basebackupStatus = worstStatus([basebackupAgeStatus, basebackupCheckedStatus]);
 
   const restic = ['apps-vps', 'db-vps'].map((host) => {
     const metric = metrics.resticBackups.find((item) => item.host === host);
@@ -155,23 +142,24 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
 
   const overall = worstStatus([
     logicalStatus,
-    walStatus,
-    basebackupStatus,
     restoreDrillStatus,
     ...restic.map((backup) => backup.status),
   ]);
 
-  const message = `Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • WAL ${formatAge(metrics.walArchiveAgeSeconds)} • Base ${formatAge(metrics.walgBasebackupAgeSeconds)} • Drill ${formatAge(metrics.restoreDrillAgeSeconds)} • Restic apps ${formatAge(restic[0].lastSuccessAgeSec)} / db ${formatAge(restic[1].lastSuccessAgeSec)}`;
+  const message = `Daily snapshots • Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • Restore test ${formatAge(metrics.restoreDrillAgeSeconds)} • Restic apps ${formatAge(restic[0].lastSuccessAgeSec)} / db ${formatAge(restic[1].lastSuccessAgeSec)}`;
 
   return {
     status: overall,
     message,
-    wal: { status: walStatus, ageSec: metrics.walArchiveAgeSeconds },
+    // Retired by the approved snapshot-only policy on 2026-09-10.
+    // Do not present /bin/true archiver counters as remote recovery protection.
+    wal: { enabled: false, status: 'unknown', ageSec: null },
     logical: { status: logicalStatus, ageSec: metrics.logicalBackupAgeSeconds, bytes: metrics.logicalBackupBytes },
     basebackup: {
-      status: basebackupStatus,
-      ageSec: metrics.walgBasebackupAgeSeconds,
-      checkedAgeSec: metrics.walgBasebackupLastCheckedAgeSeconds,
+      enabled: false,
+      status: 'unknown',
+      ageSec: null,
+      checkedAgeSec: null,
     },
     restoreDrill: { status: restoreDrillStatus, ageSec: metrics.restoreDrillAgeSeconds },
     restic,

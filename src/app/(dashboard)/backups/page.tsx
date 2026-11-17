@@ -154,34 +154,9 @@ export default function BackupsPage() {
                 <TableCell>{formatDurationLong(data?.thresholds.logicalErrorSec)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">WAL archive</TableCell>
-                <TableCell>{statusBadge(data?.wal.status || 'unknown')}</TableCell>
-                <TableCell>
-                  <span title={`${data?.wal.ageSec ?? '—'}s`}>{formatDurationShort(data?.wal.ageSec)}</span>
-                </TableCell>
-                <TableCell>{formatDurationLong(data?.thresholds.walWarnSec)}</TableCell>
-                <TableCell>{formatDurationLong(data?.thresholds.walErrorSec)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">Base backup</TableCell>
-                <TableCell>{statusBadge(data?.basebackup.status || 'unknown')}</TableCell>
-                <TableCell>
-                  <span title={`${data?.basebackup.ageSec ?? '—'}s`}>{formatDurationShort(data?.basebackup.ageSec)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationShort(data?.basebackup.checkedAgeSec)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {formatDurationLong(data?.thresholds.basebackupWarnSec)}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationLong(data?.thresholds.basebackupCheckedWarnSec)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {formatDurationLong(data?.thresholds.basebackupErrorSec)}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationLong(data?.thresholds.basebackupCheckedErrorSec)}
-                  </span>
+                <TableCell className="font-medium">R2 WAL / full backups</TableCell>
+                <TableCell colSpan={4} className="text-muted-foreground">
+                  Retired — daily snapshots retained: 7 daily / 4 weekly / 3 monthly.
                 </TableCell>
               </TableRow>
               <TableRow>
