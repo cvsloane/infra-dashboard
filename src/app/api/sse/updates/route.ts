@@ -85,28 +85,28 @@ export async function GET(request: Request) {
             withTimeout(prometheusHealth(), timeout, { ok: false, message: 'Timeout' }),
             withTimeout(redisHealth(), timeout, { ok: false, message: 'Timeout', latencyMs: 0 }),
             withTimeout(getAlertmanagerSummary({ limit: 25 }), timeout, null),
-            withTimeout(getLiveDeployments(), timeout, { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 }, buildTopology: null }),
+            withTimeout(getLiveDeployments(), timeout, { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 }, buildTopology: null, available: false }),
             withTimeout(getPostgresHealth(), timeout, { up: false, connections: { active: 0, idle: 0, max: 100 }, databases: [] }),
             withTimeout(getPgBouncerHealth(), timeout, { up: false, pools: [], total_active: 0, total_waiting: 0 }),
             withTimeout(getPostgresBackupsSummary(), timeout, null),
-            withTimeout(getAllQueueStats(), timeout, []),
+            withTimeout(getAllQueueStats(), timeout, null),
             withTimeout(getAllVPSMetrics(), timeout, { appsVps: null, dbVps: null }),
-            withTimeout(quickHealthCheck(), 8000, { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [] }),
+            withTimeout(quickHealthCheck(), 8000, null),
             withTimeout(getWorkerSupervisorStatus(), timeout, null),
             withTimeout(getHermesOverviewSummary(), timeout, null),
           ]);
 
           const deploymentsData = liveDeployments.status === 'fulfilled'
             ? liveDeployments.value
-            : { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 }, buildTopology: null };
+            : { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 }, buildTopology: null, available: false };
 
           const vpsData = vpsMetrics.status === 'fulfilled'
             ? vpsMetrics.value
             : { appsVps: null, dbVps: null };
 
-          const sitesData = siteHealth.status === 'fulfilled'
+          const sitesData = siteHealth.status === 'fulfilled' && siteHealth.value
             ? siteHealth.value
-            : { allHealthy: true, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [] };
+            : { allHealthy: false, downCount: 0, sslExpiringSoonCount: 0, sslExpiryWarnDays: 14, sites: [], available: false };
 
           const workerSupervisorData = workerSupervisor.status === 'fulfilled'
             ? workerSupervisor.value
@@ -128,7 +128,8 @@ export async function GET(request: Request) {
             postgres: postgres.status === 'fulfilled' ? postgres.value : null,
             pgbouncer: pgbouncer.status === 'fulfilled' ? pgbouncer.value : null,
             backups: backups.status === 'fulfilled' ? backups.value : null,
-            queues: queues.status === 'fulfilled' ? queues.value : [],
+            queues: queues.status === 'fulfilled' ? queues.value ?? [] : [],
+            queuesAvailable: queues.status === 'fulfilled' && queues.value !== null,
             vps: vpsData,
             sites: sitesData,
             workerSupervisor: workerSupervisorData,

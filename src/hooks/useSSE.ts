@@ -4,14 +4,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CoolifyBuildTopologyClient, DeploymentRecordClient, DeploymentStatsClient } from '@/types/deployments';
 import type { HermesOverviewSummary } from '@/types/hermes';
 
-interface SSEOptions {
+interface SSEOptions<T> {
   onConnect?: () => void;
+  onMessage?: (data: T) => void;
   onError?: (error: Event) => void;
   autoReconnect?: boolean;
   reconnectDelay?: number;
 }
 
-export function useSSE<T>(url: string, options: SSEOptions = {}) {
+export function useSSE<T>(url: string, options: SSEOptions<T> = {}) {
   const [data, setData] = useState<T | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,10 +24,12 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
   // Store callbacks in refs to avoid recreating connection on callback changes
   const onConnectRef = useRef(options.onConnect);
   const onErrorRef = useRef(options.onError);
+  const onMessageRef = useRef(options.onMessage);
   useEffect(() => {
     onConnectRef.current = options.onConnect;
     onErrorRef.current = options.onError;
-  }, [options.onConnect, options.onError]);
+    onMessageRef.current = options.onMessage;
+  }, [options.onConnect, options.onError, options.onMessage]);
 
   const {
     autoReconnect = true,
@@ -57,6 +60,7 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
       try {
         const parsed = JSON.parse(event.data);
         setData(parsed);
+        onMessageRef.current?.(parsed);
       } catch (e) {
         console.error('Failed to parse SSE data:', e);
       }
@@ -117,6 +121,17 @@ export function useSSE<T>(url: string, options: SSEOptions = {}) {
   };
 }
 
+interface HostSnapshot {
+  hostname: string;
+  observedAt?: string | null;
+  metricsAgeSeconds?: number | null;
+  cpu: { usagePercent: number; cores: number };
+  memory: { totalBytes: number; availableBytes: number; availableObserved?: boolean; usedPercent: number };
+  disk: { totalBytes: number; availableBytes: number; availableObserved?: boolean; usedPercent: number; mountPoint: string };
+  load: { load1: number; load5: number; load15: number };
+  uptime: number;
+}
+
 // Type for the dashboard SSE updates
 export interface DashboardUpdate {
   type: 'connected' | 'update' | 'error';
@@ -155,6 +170,7 @@ export interface DashboardUpdate {
     recent: DeploymentRecordClient[];
     stats: DeploymentStatsClient;
     buildTopology: CoolifyBuildTopologyClient | null;
+    available?: boolean;
   };
   postgres?: {
     up: boolean;
@@ -183,7 +199,14 @@ export interface DashboardUpdate {
       lastRunAgeSec: number | null;
       lastSuccessAgeSec: number | null;
     }>;
+    offsiteRestore?: {
+      status: 'ok' | 'warning' | 'error' | 'unknown';
+      lastRunAt: string | null;
+      lastSuccessAt: string | null;
+    };
+    standbyLagSeconds?: number | null;
   } | null;
+  queuesAvailable?: boolean;
   queues?: Array<{
     name: string;
     waiting: number;
@@ -204,26 +227,12 @@ export interface DashboardUpdate {
     failuresPerMin?: number;
   }>;
   vps?: {
-    appsVps: {
-      hostname: string;
-      metricsAgeSeconds?: number | null;
-      cpu: { usagePercent: number; cores: number };
-      memory: { totalBytes: number; availableBytes: number; usedPercent: number };
-      disk: { totalBytes: number; availableBytes: number; usedPercent: number; mountPoint: string };
-      load: { load1: number; load5: number; load15: number };
-      uptime: number;
-    } | null;
-    dbVps: {
-      hostname: string;
-      metricsAgeSeconds?: number | null;
-      cpu: { usagePercent: number; cores: number };
-      memory: { totalBytes: number; availableBytes: number; usedPercent: number };
-      disk: { totalBytes: number; availableBytes: number; usedPercent: number; mountPoint: string };
-      load: { load1: number; load5: number; load15: number };
-      uptime: number;
-    } | null;
+    appsVps: HostSnapshot | null;
+    dbVps: HostSnapshot | null;
   };
   sites?: {
+    available?: boolean;
+    eligibleCount?: number;
     allHealthy: boolean;
     downCount: number;
     sslExpiringSoonCount?: number;

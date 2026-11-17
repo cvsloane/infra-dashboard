@@ -75,6 +75,12 @@ export interface PostgresBackupMetrics {
   walgBasebackupAgeSeconds: number | null;
   walgBasebackupLastCheckedAgeSeconds: number | null;
   resticBackups: ResticBackupMetric[];
+  offsiteRestore: {
+    lastRunSuccess: number | null;
+    lastRunAt: string | null;
+    lastSuccessAt: string | null;
+  };
+  standbyLagSeconds: number | null;
 }
 
 export interface ResticBackupMetric {
@@ -139,12 +145,13 @@ function requirePrometheusUrl(): string {
   return PROMETHEUS_URL;
 }
 
-async function queryPrometheus(query: string): Promise<PrometheusResult[]> {
+async function queryPrometheus(query: string, signal?: AbortSignal): Promise<PrometheusResult[]> {
   const url = new URL('/api/v1/query', requirePrometheusUrl());
   url.searchParams.set('query', query);
 
   const response = await fetch(url.toString(), {
     cache: 'no-store',
+    signal,
   });
 
   if (!response.ok) {
@@ -413,6 +420,12 @@ export async function getConnectionHistory(hours = 1): Promise<{ time: Date; con
   }
 }
 
+function metricTimestamp(value: number | null): string | null {
+  return value !== null && value > 0 && value <= Date.now() / 1000
+    ? new Date(value * 1000).toISOString()
+    : null;
+}
+
 export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics> {
   try {
     const [
@@ -425,7 +438,8 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       resticLastRunSuccess,
       resticLastRunAge,
       resticLastSuccessAge,
-    ] = await Promise.all([
+      recoveryEvidence,
+    ] = (await Promise.allSettled([
       queryPrometheus('max(pg_stat_archiver_seconds_since_last_wal)'),
       queryPrometheus('max(pg_backup_status_logical_backup_age_seconds)'),
       queryPrometheus('max(pg_backup_status_logical_backup_last_success_bytes)'),
@@ -435,12 +449,24 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       queryPrometheus('heaviside_restic_backup_last_run_success'),
       queryPrometheus('time() - heaviside_restic_backup_last_run_timestamp_seconds'),
       queryPrometheus('time() - heaviside_restic_backup_last_success_timestamp_seconds'),
-    ]);
+      // Keep this optional reading within the caller's existing three-second collection window.
+      queryPrometheus(
+        '{__name__=~"heaviside_restic_restore_check_last_(run_success|run_timestamp_seconds|success_timestamp_seconds)",host="apps-vps"} or (pg_replication_lag_seconds{job="postgres"} and (pg_replication_is_replica{job="postgres"} == 1))',
+        AbortSignal.timeout(2000),
+      ),
+    ])).map((result) => result.status === 'fulfilled' ? result.value : []);
 
     const resticHosts = new Map<string, string>();
     for (const result of [...resticLastRunSuccess, ...resticLastRunAge, ...resticLastSuccessAge]) {
       if (result.metric.host) resticHosts.set(result.metric.host, result.metric.backup_job || result.metric.host);
     }
+
+    // The live monitor currently publishes one series per measure. Multiple matching series
+    // would make the value ambiguous, so wait for a specific replica/job identity in that case.
+    const readRecoveryMetric = (name: string) => {
+      const series = recoveryEvidence.filter((item) => item.metric.__name__ === name);
+      return series.length === 1 ? getOptionalValue(series) : null;
+    };
 
     return {
       walArchiveAgeSeconds: getOptionalValue(walArchiveAge),
@@ -449,6 +475,12 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       restoreDrillAgeSeconds: getOptionalValue(restoreDrillAge),
       walgBasebackupAgeSeconds: getOptionalValue(walgBasebackupAge),
       walgBasebackupLastCheckedAgeSeconds: getOptionalValue(walgBasebackupCheckedAge),
+      offsiteRestore: {
+        lastRunSuccess: readRecoveryMetric('heaviside_restic_restore_check_last_run_success'),
+        lastRunAt: metricTimestamp(readRecoveryMetric('heaviside_restic_restore_check_last_run_timestamp_seconds')),
+        lastSuccessAt: metricTimestamp(readRecoveryMetric('heaviside_restic_restore_check_last_success_timestamp_seconds')),
+      },
+      standbyLagSeconds: readRecoveryMetric('pg_replication_lag_seconds'),
       resticBackups: Array.from(resticHosts, ([host, job]) => ({
         host,
         job,
@@ -467,6 +499,8 @@ export async function getPostgresBackupMetrics(): Promise<PostgresBackupMetrics>
       walgBasebackupAgeSeconds: null,
       walgBasebackupLastCheckedAgeSeconds: null,
       resticBackups: [],
+      offsiteRestore: { lastRunSuccess: null, lastRunAt: null, lastSuccessAt: null },
+      standbyLagSeconds: null,
     };
   }
 }
@@ -487,6 +521,7 @@ export async function healthCheck(): Promise<{ ok: boolean; message: string }> {
 // VPS System Metrics (requires node_exporter)
 export interface VPSMetrics {
   hostname: string;
+  observedAt: string | null;
   metricsAgeSeconds?: number | null;
   cpu: {
     usagePercent: number;
@@ -495,11 +530,13 @@ export interface VPSMetrics {
   memory: {
     totalBytes: number;
     availableBytes: number;
+    availableObserved: boolean;
     usedPercent: number;
   };
   disk: {
     totalBytes: number;
     availableBytes: number;
+    availableObserved: boolean;
     usedPercent: number;
     mountPoint: string;
   };
@@ -541,8 +578,16 @@ export async function getVPSMetrics(instance: string): Promise<VPSMetrics | null
     const load15 = await queryPrometheus(`node_load15{instance="${instance}"}`);
 
     // Uptime
-    const bootTime = await queryPrometheus(`node_boot_time_seconds{instance="${instance}"}`);
-    const metricsAgeSeconds = getSampleAgeSeconds(bootTime);
+    // Instant query results are timestamped at evaluation time. Request the scrape
+    // timestamp in the same query alongside the boot-time value.
+    const bootMetric = `node_boot_time_seconds{instance="${instance}"}`;
+    const bootSamples = await queryPrometheus(
+      `${bootMetric} or label_replace(timestamp(${bootMetric}), "infra_sample", "scrape_time", "instance", ".+")`,
+    );
+    const bootTime = bootSamples.filter((sample) => sample.metric.infra_sample !== 'scrape_time');
+    const scrapeTime = bootSamples.filter((sample) => sample.metric.infra_sample === 'scrape_time');
+    const observedAt = metricTimestamp(getOptionalValue(scrapeTime));
+    const metricsAgeSeconds = observedAt ? Math.max(0, (Date.now() - Date.parse(observedAt)) / 1000) : null;
 
     const totalMem = getValue(memTotal);
     const availMem = getValue(memAvailable);
@@ -551,6 +596,7 @@ export async function getVPSMetrics(instance: string): Promise<VPSMetrics | null
 
     return {
       hostname: instance.split(':')[0],
+      observedAt,
       metricsAgeSeconds,
       cpu: {
         usagePercent: Math.round(getValue(cpuIdle) * 10) / 10,
@@ -559,11 +605,13 @@ export async function getVPSMetrics(instance: string): Promise<VPSMetrics | null
       memory: {
         totalBytes: totalMem,
         availableBytes: availMem,
+        availableObserved: getOptionalValue(memAvailable) !== null,
         usedPercent: totalMem > 0 ? Math.round((1 - availMem / totalMem) * 1000) / 10 : 0,
       },
       disk: {
         totalBytes: totalDisk,
         availableBytes: availDisk,
+        availableObserved: getOptionalValue(diskAvailable) !== null,
         usedPercent: totalDisk > 0 ? Math.round((1 - availDisk / totalDisk) * 1000) / 10 : 0,
         mountPoint: '/',
       },

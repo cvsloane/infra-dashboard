@@ -52,6 +52,7 @@ interface ServersData {
     dbVps: VPSMetrics | null;
   };
   sites: {
+    available?: boolean;
     allHealthy: boolean;
     downCount: number;
     sslExpiringSoonCount?: number;
@@ -69,7 +70,7 @@ export default function ServersPage() {
       const vps = sseData.vps;
       setData((prev) => ({
         vps,
-        sites: prev?.sites || { allHealthy: true, downCount: 0, sites: [] },
+        sites: prev?.sites || { available: false, allHealthy: false, downCount: 0, sites: [] },
       }));
       setLoading(false);
     }

@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import * as prometheus from '@/lib/prometheus/client';
 import {
+  getPostgresBackupsSummary,
   classifyAge,
   classifyResticBackup,
   worstStatus,
@@ -10,6 +12,7 @@ import {
 describe('postgres backups helpers', () => {
   it('classifyAge returns unknown when metric missing', () => {
     expect(classifyAge(null, 10, 20)).toBe('unknown');
+    expect(classifyAge(-1, 10, 20)).toBe('unknown');
   });
 
   it('classifyAge respects warning/error thresholds', () => {
@@ -55,5 +58,45 @@ describe('postgres backups helpers', () => {
     expect(classifyResticBackup(1, 5, 10, 20)).toBe('ok');
     expect(classifyResticBackup(1, 10, 10, 20)).toBe('warning');
     expect(classifyResticBackup(1, 20, 10, 20)).toBe('error');
+  });
+});
+
+
+describe('recovery health for the daily snapshot policy', () => {
+  const fresh = new Date(Date.now() - 3600 * 1000).toISOString();
+  const metrics: prometheus.PostgresBackupMetrics = {
+    walArchiveAgeSeconds: 90 * 86400,
+    walgBasebackupAgeSeconds: 90 * 86400,
+    walgBasebackupLastCheckedAgeSeconds: 90 * 86400,
+    logicalBackupAgeSeconds: 3600,
+    logicalBackupBytes: 100,
+    restoreDrillAgeSeconds: 3600,
+    resticBackups: ['apps-vps', 'db-vps'].map((host) => ({
+      host, job: host, lastRunSuccess: 1, lastRunAgeSeconds: 3600, lastSuccessAgeSeconds: 3600,
+    })),
+    offsiteRestore: { lastRunSuccess: 1, lastRunAt: fresh, lastSuccessAt: fresh },
+    standbyLagSeconds: 4,
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('scores required checks and still returns historical physical readings', async () => {
+    vi.spyOn(prometheus, 'getPostgresBackupMetrics').mockResolvedValue(metrics);
+    expect(await getPostgresBackupsSummary()).toMatchObject({
+      status: 'ok',
+      wal: { status: 'error' },
+      basebackup: { status: 'error' },
+      offsiteRestore: { status: 'ok', lastSuccessAt: fresh },
+      standbyLagSeconds: 4,
+    });
+  });
+
+  it('reports a failed offsite exercise rather than borrowing its past success', async () => {
+    vi.spyOn(prometheus, 'getPostgresBackupMetrics').mockResolvedValue({
+      ...metrics, offsiteRestore: { ...metrics.offsiteRestore, lastRunSuccess: 0 },
+    });
+    expect(await getPostgresBackupsSummary()).toMatchObject({
+      status: 'error', offsiteRestore: { status: 'error', lastSuccessAt: fresh },
+    });
   });
 });

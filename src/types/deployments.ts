@@ -10,6 +10,7 @@ export interface DeploymentRecordClient {
   uuid: string;
   applicationName: string;
   applicationUuid: string;
+  applicationPublicUuid?: string | null;
   status: 'queued' | 'in_progress' | 'finished' | 'failed' | 'cancelled' | 'cancelled-by-user';
   commit: string | null;
   commitMessage: string | null;

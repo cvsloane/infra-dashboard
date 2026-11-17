@@ -19,6 +19,7 @@ interface SiteHealth {
 }
 
 interface SiteHealthSummary {
+  available?: boolean;
   allHealthy: boolean;
   downCount: number;
   sslExpiringSoonCount?: number;
@@ -64,7 +65,7 @@ function isSslExpiringSoon(site: SiteHealth): boolean {
 }
 
 export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
-  if (!data || data.sites.length === 0) {
+  if (!data || data.available === false || data.sites.length === 0) {
     return (
       <Card>
         <CardHeader className="pb-2">
@@ -74,7 +75,9 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No sites to monitor</p>
+          <p className="text-sm text-muted-foreground">
+            {!data || data.available === false ? 'Site readings are unavailable' : 'No sites to monitor'}
+          </p>
         </CardContent>
       </Card>
     );
@@ -89,7 +92,7 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
 
   const hasDown = (data.downCount || 0) > 0;
   const hasExpiring = expiringCount > 0;
-  const allHealthy = !hasDown && !hasExpiring;
+  const allHealthy = healthyCount === totalCount && !hasExpiring;
 
   if (compact) {
     return (
@@ -114,7 +117,7 @@ export function SiteHealthCard({ data, compact = false }: SiteHealthCardProps) {
               ) : (
                 <Badge variant="secondary" className="gap-1">
                   <AlertCircle className="h-3 w-3" />
-                  {expiringCount} SSL Expiring
+                  {hasExpiring ? `${expiringCount} SSL expiring` : `${totalCount - healthyCount} checks need attention`}
                 </Badge>
               )}
             </div>

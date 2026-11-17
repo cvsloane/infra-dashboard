@@ -20,6 +20,7 @@ export interface DeploymentRecord {
   uuid: string;
   applicationName: string;
   applicationUuid: string;
+  applicationPublicUuid?: string | null;
   status: 'queued' | 'in_progress' | 'finished' | 'failed' | 'cancelled' | 'cancelled-by-user';
   commit: string | null;
   commitMessage: string | null;
@@ -73,7 +74,8 @@ export async function getActiveDeployments(): Promise<DeploymentRecord[]> {
       updated_at as "updatedAt",
       finished_at as "finishedAt",
       EXTRACT(EPOCH FROM (COALESCE(finished_at, NOW()) - created_at)) * 1000 as "durationMs",
-      logs
+      logs,
+      (SELECT a.uuid FROM applications a WHERE a.id::text = application_deployment_queues.application_id) as "applicationPublicUuid"
     FROM application_deployment_queues
     WHERE status IN ('queued', 'in_progress')
     ORDER BY
@@ -100,7 +102,8 @@ export async function getRecentDeployments(minutes: number = 30): Promise<Deploy
       created_at as "createdAt",
       updated_at as "updatedAt",
       finished_at as "finishedAt",
-      EXTRACT(EPOCH FROM (COALESCE(finished_at, NOW()) - created_at)) * 1000 as "durationMs"
+      EXTRACT(EPOCH FROM (COALESCE(finished_at, NOW()) - created_at)) * 1000 as "durationMs",
+      (SELECT a.uuid FROM applications a WHERE a.id::text = application_deployment_queues.application_id) as "applicationPublicUuid"
     FROM application_deployment_queues
     WHERE updated_at > NOW() - INTERVAL '${minutes} minutes'
       AND status NOT IN ('queued', 'in_progress')
@@ -298,6 +301,7 @@ export async function getLiveDeployments() {
       recent,
       stats,
       buildTopology,
+      available: true,
     };
   } catch (error) {
     console.error('Failed to fetch live deployments:', error);
@@ -306,6 +310,7 @@ export async function getLiveDeployments() {
       recent: [],
       stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 },
       buildTopology: null,
+      available: false,
     };
   }
 }
