@@ -40,12 +40,5 @@
     "target": "homeadmin@192.168.110.199",
     "jump": "root@192.168.8.113",
     "mac": "74:12:b3:d4:73:c5"
-  },
-  {
-    "child": "joseph",
-    "device_id": "JBSGAMINGPC",
-    "target": "homeadmin@192.168.110.206",
-    "jump": "root@192.168.8.113",
-    "mac": "60:dd:8e:d6:5f:38"
   }
 ]
