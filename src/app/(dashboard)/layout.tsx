@@ -8,7 +8,13 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useSSE, type DashboardUpdate } from '@/hooks/useSSE';
 import { createContext, useContext, useCallback, useState } from 'react';
 
+interface DashboardReading {
+  update: DashboardUpdate;
+  receivedAt: number;
+}
+
 interface DashboardContextType {
+  reading: DashboardReading | null;
   data: DashboardUpdate | null;
   isConnected: boolean;
   lastUpdated?: string;
@@ -18,6 +24,7 @@ interface DashboardContextType {
 
 const DashboardContext = createContext<DashboardContextType>({
   data: null,
+  reading: null,
   isConnected: false,
   lastUpdated: undefined,
   refresh: () => {},
@@ -33,10 +40,18 @@ export default function DashboardLayout({
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [reading, setReading] = useState<DashboardReading | null>(null);
+  const recordReading = useCallback((update: DashboardUpdate) => {
+    const sampledAt = Date.parse(update.timestamp);
+    if (update.type !== 'update' || !Number.isFinite(sampledAt)) return;
+    const receivedAt = Date.now();
+    setReading(previous => previous && Date.parse(previous.update.timestamp) >= sampledAt
+      ? previous : { update, receivedAt });
+  }, []);
   const { data, isConnected, lastMessageAt } = useSSE<DashboardUpdate>(`/api/sse/updates?key=${refreshKey}`, {
-    onError: () => {},
+    onMessage: recordReading,
   });
-  const lastUpdated = data?.type === 'update' ? data.timestamp : undefined;
+  const lastUpdated = reading?.update.timestamp;
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -52,7 +67,7 @@ export default function DashboardLayout({
   });
 
   return (
-    <DashboardContext.Provider value={{ data, isConnected, lastUpdated, lastMessageAt, refresh }}>
+    <DashboardContext.Provider value={{ data, reading, isConnected, lastUpdated, lastMessageAt, refresh }}>
       <div className="flex h-screen bg-background">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col overflow-hidden">

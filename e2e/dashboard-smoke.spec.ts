@@ -23,6 +23,7 @@ async function mockDashboardApis(page: Page) {
     uuid: 'deploy-1',
     applicationName: 'paving-site',
     applicationUuid: 'app-1',
+    applicationPublicUuid: 'app-1',
     status: 'finished',
     commit: 'abcdef1234567890',
     commitMessage: 'Ship dashboard smoke',
@@ -86,6 +87,13 @@ async function mockDashboardApis(page: Page) {
     await route.fulfill({ status: 503, contentType: 'text/plain', body: 'stream disabled in smoke test' });
   });
 
+  await page.route('**/api/health', (route) => fulfillJson(route, {
+    services: {
+      coolify: { ok: true, message: 'Ready' },
+      prometheus: { ok: true, message: 'Ready' },
+      redis: { ok: true, message: 'Ready' },
+    },
+  }));
   await page.route('**/api/coolify/applications', (route) => fulfillJson(route, { applications: [application] }));
   await page.route('**/api/coolify/deployments**', (route) =>
     fulfillJson(route, {
@@ -111,6 +119,8 @@ async function mockDashboardApis(page: Page) {
       logical: { status: 'ok', ageSec: 120, bytes: 1234 },
       basebackup: { status: 'ok', ageSec: 300, checkedAgeSec: 60 },
       restoreDrill: { status: 'ok', ageSec: 600 },
+      offsiteRestore: { status: 'ok', lastRunAt: now, lastSuccessAt: now },
+      standbyLagSeconds: 3,
       restic: [
         { host: 'apps-vps', job: 'apps-vps-restic', status: 'ok', lastRunSuccess: 1, lastRunAgeSec: 30, lastSuccessAgeSec: 30 },
         { host: 'db-vps', job: 'db-vps-restic', status: 'ok', lastRunSuccess: 1, lastRunAgeSec: 30, lastSuccessAgeSec: 30 },
@@ -134,9 +144,11 @@ async function mockDashboardApis(page: Page) {
       queues: [
         {
           name: 'content',
-          waiting: 0,
+          waiting: 2,
           active: 0,
           completed: 5,
+          oldestWaitingAgeSec: 120,
+          jobsPerMin: 3,
           failed: 0,
           delayed: 0,
           paused: 0,
@@ -146,14 +158,24 @@ async function mockDashboardApis(page: Page) {
       ],
     })
   );
-  await page.route('**/api/servers/status', (route) =>
+  await page.route('**/api/servers/status**', (route) =>
     fulfillJson(route, {
       sites: {
         allHealthy: true,
         downCount: 0,
         sslExpiringSoonCount: 0,
         sslExpiryWarnDays: 14,
-        sites: [],
+        eligibleCount: 1,
+        sites: [{
+          applicationUuid: 'app-1',
+          name: 'paving-site',
+          fqdn: 'https://paving.example.com',
+          status: 'healthy',
+          httpStatus: 200,
+          responseTimeMs: 72,
+          sslDaysRemaining: 50,
+          lastChecked: now,
+        }],
       },
     })
   );
@@ -320,8 +342,114 @@ test.beforeEach(async ({ page }) => {
 test('overview smoke renders operator health summary', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-  await expect(page.getByText('Action-first health summary')).toBeVisible();
-  await expect(page.getByText('All clear')).toBeVisible();
+  const table = page.getByRole('table', { name: 'Service health' });
+  await expect(table).toBeVisible();
+  await table.getByRole('button', { name: 'Service', exact: true }).click();
+  await expect(table.getByRole('columnheader', { name: 'Service' })).toHaveAttribute('aria-sort', 'ascending');
+  await page.getByRole('searchbox', { name: 'Search services' }).fill('paving');
+  await table.getByRole('link', { name: 'paving-site Site' }).click();
+  await expect(page.getByRole('heading', { name: 'paving-site' })).toBeVisible();
+  await expect(page.getByText('72 ms', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Deployment finished' })).toHaveAttribute('href', '/coolify/deploy-1');
+  await expect(page.getByRole('link', { name: 'Infrastructure details' })).toHaveAttribute('href', '/overview/details');
+});
+
+test('phone shows service evidence on its own and restores the filtered list on Back', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/overview/details');
+  await page.getByRole('link', { name: 'Back to service overview' }).click();
+  await page.getByRole('searchbox', { name: 'Search services' }).fill('content');
+  const row = page.getByRole('link', { name: /content/ });
+  await row.click();
+  await expect(page.getByRole('heading', { name: 'content' })).toBeFocused();
+  await expect(page.getByText('Oldest waiting job')).toBeVisible();
+  await expect(page.getByText('2m 0s', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Monitored services' })).toBeHidden();
+  await expect.poll(() => page.locator('main').evaluate(el => el.scrollWidth - el.clientWidth)).toBe(0);
+  await page.goBack();
+  await expect(page.getByRole('searchbox', { name: 'Search services' })).toHaveValue('content');
+  await expect(row).toBeFocused();
+  await row.click();
+  await page.getByRole('link', { name: 'Back to services' }).click();
+  await expect(row).toBeFocused();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Infrastructure details' })).toBeVisible();
+});
+
+test('an unavailable monitoring source is visible alongside usable queue readings', async ({ page }) => {
+  await page.route('**/api/alertmanager/alerts', route => route.fulfill({ status: 503, body: '{}' }));
+  await page.goto('/');
+  const table = page.getByRole('table', { name: 'Service health' });
+  await expect(table.getByRole('row', { name: /Alertmanager.*Monitoring gap/ })).toBeVisible();
+  await expect(table.getByRole('row', { name: /content.*Healthy/ })).toBeVisible();
+});
+
+test('a newer live incident survives an older pending fallback request', async ({ page }) => {
+  await page.addInitScript(() => {
+    class FixtureSource extends EventTarget {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<string>) => void) | null = null;
+      onerror: (() => void) | null = null;
+      private readonly observe = (event: Event) => {
+        if (!this.onopen) return;
+        this.onopen();
+        this.onmessage?.(new MessageEvent('message', { data: (event as CustomEvent<string>).detail }));
+      };
+      constructor() {
+        super();
+        window.addEventListener('dashboard-fixture', this.observe);
+      }
+      close() {
+        window.removeEventListener('dashboard-fixture', this.observe);
+      }
+    }
+    window.EventSource = FixtureSource as unknown as typeof EventSource;
+  });
+  let startPoll!: () => void;
+  const pollStarted = new Promise<void>(resolve => { startPoll = resolve; });
+  let finishPoll!: () => void;
+  const pollReleased = new Promise<void>(resolve => { finishPoll = resolve; });
+  await page.route('**/api/alertmanager/alerts', async route => {
+    startPoll();
+    await pollReleased;
+    await route.fallback();
+  });
+
+  await page.goto('/');
+  await pollStarted;
+  const timestamp = new Date().toISOString();
+  try {
+    await page.evaluate(at => {
+      window.dispatchEvent(new CustomEvent('dashboard-fixture', { detail: JSON.stringify({
+        type: 'update', timestamp: at, alerts: {
+          status: 'error', fetchedAt: at, firing: 1, suppressed: 0,
+          alerts: [{ fingerprint: 'critical-queue', name: 'Delivery worker down', severity: 'critical', state: 'firing', startsAt: at }],
+        },
+      }) }));
+    }, timestamp);
+    const row = page.getByRole('row', { name: /Delivery worker down.*Affected/ });
+    await expect(row).toBeVisible();
+    finishPoll();
+    await expect(page.getByText('Live readings')).toBeVisible();
+    await expect(row).toBeVisible();
+  } finally {
+    finishPoll();
+  }
+});
+
+
+test('the overview polls its sources when the live stream opens without a reading', async ({ page }) => {
+  await page.addInitScript(() => {
+    class SilentSource {
+      onopen: (() => void) | null = null;
+      private readonly timer = window.setTimeout(() => this.onopen?.(), 0);
+      close() { window.clearTimeout(this.timer); }
+    }
+    window.EventSource = SilentSource as unknown as typeof EventSource;
+  });
+  await page.goto('/');
+  await expect(page.getByText('Polling readings', { exact: true })).toBeVisible({ timeout: 18000 });
+  await expect(page.getByRole('row', { name: /paving-site.*Healthy/ })).toBeVisible();
 });
 
 test('scheduled jobs smoke renders cron inventory', async ({ page }) => {

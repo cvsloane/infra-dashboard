@@ -42,7 +42,7 @@ export function Header({
   // Generate breadcrumbs
   const segments = pathname.split('/').filter(Boolean);
   const breadcrumbs = segments.map((segment, index) => {
-    const href = `/${segments.slice(0, index + 1).join('/')}`;
+    const href = index === 0 && segment === 'overview' ? '/' : `/${segments.slice(0, index + 1).join('/')}`;
     // Capitalize first letter and replace hyphens
     const label = segment
       .replace(/-/g, ' ')
@@ -168,7 +168,7 @@ export function Header({
         )}
 
         {onShortcutsClick && (
-          <Button variant="outline" size="sm" onClick={onShortcutsClick} className="gap-2">
+          <Button variant="outline" size="sm" onClick={onShortcutsClick} aria-label="Keyboard shortcuts" className="gap-2">
             <Keyboard className="h-4 w-4" />
             <span className="hidden sm:inline">Shortcuts</span>
             <kbd className="hidden rounded border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground md:inline-flex">

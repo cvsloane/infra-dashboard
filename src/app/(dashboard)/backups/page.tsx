@@ -18,6 +18,8 @@ interface BackupsResponse {
   logical: { status: BackupStatus; ageSec: number | null; bytes: number | null };
   basebackup: { status: BackupStatus; ageSec: number | null; checkedAgeSec: number | null };
   restoreDrill: { status: BackupStatus; ageSec: number | null };
+  offsiteRestore?: { status: BackupStatus; lastRunAt: string | null; lastSuccessAt: string | null };
+  standbyLagSeconds?: number | null;
   restic: Array<{
     host: string;
     job: string;
@@ -35,6 +37,7 @@ interface BackupsResponse {
     logicalErrorSec: number;
     restoreDrillWarnSec: number;
     restoreDrillErrorSec: number;
+    offsiteRestoreMaxAgeSec?: number;
     basebackupWarnSec: number;
     basebackupErrorSec: number;
     basebackupCheckedWarnSec: number;
@@ -154,37 +157,6 @@ export default function BackupsPage() {
                 <TableCell>{formatDurationLong(data?.thresholds.logicalErrorSec)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">WAL archive</TableCell>
-                <TableCell>{statusBadge(data?.wal.status || 'unknown')}</TableCell>
-                <TableCell>
-                  <span title={`${data?.wal.ageSec ?? '—'}s`}>{formatDurationShort(data?.wal.ageSec)}</span>
-                </TableCell>
-                <TableCell>{formatDurationLong(data?.thresholds.walWarnSec)}</TableCell>
-                <TableCell>{formatDurationLong(data?.thresholds.walErrorSec)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium">Base backup</TableCell>
-                <TableCell>{statusBadge(data?.basebackup.status || 'unknown')}</TableCell>
-                <TableCell>
-                  <span title={`${data?.basebackup.ageSec ?? '—'}s`}>{formatDurationShort(data?.basebackup.ageSec)}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationShort(data?.basebackup.checkedAgeSec)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {formatDurationLong(data?.thresholds.basebackupWarnSec)}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationLong(data?.thresholds.basebackupCheckedWarnSec)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {formatDurationLong(data?.thresholds.basebackupErrorSec)}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    chk {formatDurationLong(data?.thresholds.basebackupCheckedErrorSec)}
-                  </span>
-                </TableCell>
-              </TableRow>
-              <TableRow>
                 <TableCell className="font-medium">Restore drill</TableCell>
                 <TableCell>{statusBadge(data?.restoreDrill.status || 'unknown')}</TableCell>
                 <TableCell>
@@ -192,6 +164,17 @@ export default function BackupsPage() {
                 </TableCell>
                 <TableCell>{formatDurationLong(data?.thresholds.restoreDrillWarnSec)}</TableCell>
                 <TableCell>{formatDurationLong(data?.thresholds.restoreDrillErrorSec)}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Offsite restore check</TableCell>
+                <TableCell>{statusBadge(data?.offsiteRestore?.status ?? 'unknown')}</TableCell>
+                <TableCell>
+                  {data?.offsiteRestore?.lastSuccessAt
+                    ? <time dateTime={data.offsiteRestore.lastSuccessAt}>{new Date(data.offsiteRestore.lastSuccessAt).toLocaleString()}</time>
+                    : 'Unavailable'}
+                </TableCell>
+                <TableCell>—</TableCell>
+                <TableCell>{formatDurationLong(data?.thresholds.offsiteRestoreMaxAgeSec)}</TableCell>
               </TableRow>
               {(data?.restic ?? []).map((backup) => (
                 <TableRow key={backup.host}>
@@ -212,6 +195,15 @@ export default function BackupsPage() {
             </TableBody>
           </Table>
 
+          <p className="mt-4 text-sm text-muted-foreground">
+            Observed standby lag {data?.standbyLagSeconds != null ? formatDurationLong(data.standbyLagSeconds) : 'unavailable'}.
+          </p>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Retired recovery checks</summary>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Physical base backup and continuous WAL archiving were retired under the daily logical-snapshot policy.
+            </p>
+          </details>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
               Raw metrics

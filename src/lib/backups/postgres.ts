@@ -14,6 +14,7 @@ export const DEFAULT_BACKUP_THRESHOLDS = {
   // Restore drill runs monthly (cron: 0 4 1 * *) and monitor threshold is 35 days.
   restoreDrillWarnSec: 35 * 24 * 60 * 60,
   restoreDrillErrorSec: 45 * 24 * 60 * 60,
+  offsiteRestoreMaxAgeSec: 35 * 24 * 60 * 60,
 
   // Base backups should be rotated regularly; we warn before it gets "months old".
   basebackupWarnSec: 14 * 24 * 60 * 60,
@@ -47,12 +48,18 @@ export interface PostgresBackupsSummary {
     warnSec: number;
     errorSec: number;
   }>;
+  offsiteRestore: {
+    status: BackupHealthStatus;
+    lastRunAt: string | null;
+    lastSuccessAt: string | null;
+  };
+  standbyLagSeconds: number | null;
   thresholds: typeof DEFAULT_BACKUP_THRESHOLDS;
   _raw: PostgresBackupMetrics;
 }
 
 export function classifyAge(ageSec: number | null, warnSec: number, errorSec: number): BackupHealthStatus {
-  if (ageSec === null || !Number.isFinite(ageSec)) return 'unknown';
+  if (ageSec === null || !Number.isFinite(ageSec) || ageSec < 0) return 'unknown';
   if (ageSec >= errorSec) return 'error';
   if (ageSec >= warnSec) return 'warning';
   return 'ok';
@@ -153,15 +160,22 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
     };
   });
 
+  const { lastRunSuccess, lastRunAt, lastSuccessAt } = metrics.offsiteRestore;
+  const offsiteAge = lastSuccessAt ? (Date.now() - Date.parse(lastSuccessAt)) / 1000 : null;
+  const offsiteStatus = lastRunSuccess === 0 || (offsiteAge !== null && offsiteAge >= thresholds.offsiteRestoreMaxAgeSec)
+    ? 'error'
+    : lastRunSuccess === 1 && lastRunAt && lastSuccessAt ? 'ok' : 'unknown';
+
+  // The daily logical snapshot policy retired remote WAL and physical base-backup checks.
+  // Keep their readings available for existing callers and score the required checks only.
   const overall = worstStatus([
     logicalStatus,
-    walStatus,
-    basebackupStatus,
     restoreDrillStatus,
+    offsiteStatus,
     ...restic.map((backup) => backup.status),
   ]);
 
-  const message = `Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • WAL ${formatAge(metrics.walArchiveAgeSeconds)} • Base ${formatAge(metrics.walgBasebackupAgeSeconds)} • Drill ${formatAge(metrics.restoreDrillAgeSeconds)} • Restic apps ${formatAge(restic[0].lastSuccessAgeSec)} / db ${formatAge(restic[1].lastSuccessAgeSec)}`;
+  const message = `Logical ${formatAge(metrics.logicalBackupAgeSeconds)} • Drill ${formatAge(metrics.restoreDrillAgeSeconds)} • Restic apps ${formatAge(restic[0].lastSuccessAgeSec)} / db ${formatAge(restic[1].lastSuccessAgeSec)} • Offsite restore ${offsiteStatus}`;
 
   return {
     status: overall,
@@ -175,6 +189,8 @@ export async function getPostgresBackupsSummary(): Promise<PostgresBackupsSummar
     },
     restoreDrill: { status: restoreDrillStatus, ageSec: metrics.restoreDrillAgeSeconds },
     restic,
+    offsiteRestore: { status: offsiteStatus, lastRunAt, lastSuccessAt },
+    standbyLagSeconds: metrics.standbyLagSeconds,
     thresholds,
     _raw: metrics,
   };

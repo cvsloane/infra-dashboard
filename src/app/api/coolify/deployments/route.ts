@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     }
 
     // Default behavior: fetch live deployments only (backwards compatible)
-    const { active, recent, stats, buildTopology } = await getLiveDeployments();
+    const { active, recent, stats, buildTopology, available } = await getLiveDeployments();
 
     // Transform to expected format for backwards compatibility
     const deployments = [...active, ...recent].map(d => ({
@@ -62,6 +62,7 @@ export async function GET(request: Request) {
       recent,
       stats,
       buildTopology,
+      available,
     });
   } catch (error) {
     console.error('Failed to fetch deployments:', error);

@@ -62,7 +62,7 @@ export interface CoolifyAppTarget {
 /**
  * Get all Coolify applications with FQDNs
  */
-export async function getCoolifyApps(): Promise<CoolifyAppTarget[]> {
+export async function getCoolifyApps({ strict = false } = {}): Promise<CoolifyAppTarget[]> {
   try {
     const result = await pool.query(`
       SELECT uuid, name, fqdn
@@ -106,6 +106,7 @@ export async function getCoolifyApps(): Promise<CoolifyAppTarget[]> {
 
     return apps;
   } catch (error) {
+    if (strict) throw error;
     console.error('Failed to get Coolify apps:', error);
     return [];
   }
@@ -233,7 +234,7 @@ async function getTlsCertificateInfo(
  * Check all sites and return summary
  */
 export async function checkAllSites(): Promise<SiteHealthSummary> {
-  const apps = await getCoolifyApps();
+  const apps = await getCoolifyApps({ strict: true });
 
   // Check sites in parallel with concurrency limit
   const concurrency = 5;
@@ -276,8 +277,9 @@ export async function quickHealthCheck(): Promise<{
   sslExpiringSoonCount: number;
   sslExpiryWarnDays: number;
   sites: SiteHealth[];
+  eligibleCount: number;
 }> {
-  const apps = await getCoolifyApps();
+  const apps = await getCoolifyApps({ strict: true });
 
   // Only check first 10 sites for quick check
   const appsToCheck = apps.slice(0, 10);
@@ -295,6 +297,7 @@ export async function quickHealthCheck(): Promise<{
     allHealthy: downCount === 0 && expiringSoonCount === 0,
     downCount,
     sslExpiringSoonCount: expiringSoonCount,
+    eligibleCount: apps.length,
     sslExpiryWarnDays: SSL_EXPIRY_WARN_DAYS,
     sites: results,
   };
