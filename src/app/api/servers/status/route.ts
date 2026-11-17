@@ -4,7 +4,7 @@ import { getAllVPSMetrics } from '@/lib/prometheus/client';
 import { checkAllSites } from '@/lib/health/sites';
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

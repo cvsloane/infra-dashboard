@@ -3,7 +3,7 @@ import { triggerDeploy } from '@/lib/coolify/client';
 import { isAuthenticatedFromRequest } from '@/lib/auth';
 
 export async function POST(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

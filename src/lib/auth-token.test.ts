@@ -1,7 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COOKIE_MAX_AGE_SEC, createSessionToken, isValidSessionToken } from './auth-token';
 
 describe('auth session tokens', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('uses the recovery password when the separate signing key is blank', () => {
+    vi.stubEnv('DASHBOARD_SESSION_SECRET', '');
+    vi.stubEnv('DASHBOARD_PASSWORD', 'fixture-recovery-password');
+    expect(isValidSessionToken(createSessionToken(), 'fixture-recovery-password')).toBe(true);
+  });
+
+  it('will not issue or accept recovery cookies without a key', () => {
+    vi.stubEnv('DASHBOARD_SESSION_SECRET', '');
+    vi.stubEnv('DASHBOARD_PASSWORD', '');
+    const token = createSessionToken('fixture-key');
+    expect(() => createSessionToken()).toThrow('session signing key');
+    expect(isValidSessionToken(token)).toBe(false);
+  });
+
   it('accepts signed tokens created with the same secret', () => {
     const now = Date.UTC(2026, 3, 23);
     const token = createSessionToken('test-secret', now);

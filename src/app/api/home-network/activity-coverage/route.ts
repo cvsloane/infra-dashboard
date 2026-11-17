@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isAuthenticatedFromRequest(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!getHomeActivityDbUrl()) return NextResponse.json({ configured: false, devices: [] });
   try {
     await ensureHomeActivitySchema();

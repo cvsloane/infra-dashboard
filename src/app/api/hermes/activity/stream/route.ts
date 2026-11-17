@@ -7,7 +7,7 @@ export const revalidate = 0;
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
   const upstream = await fetch(`${baseUrl}/fleet/activity/stream`, {
     headers: hermesSidecarHeaders(),
+    signal: request.signal,
     cache: 'no-store',
   });
 

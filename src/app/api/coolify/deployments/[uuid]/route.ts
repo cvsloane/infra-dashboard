@@ -6,7 +6,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ uuid: string }> }
 ) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -13,9 +13,11 @@ import { getHermesOverviewSummary } from '@/lib/hermes/client';
 const POLL_INTERVAL = 15000;
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return new Response('Unauthorized', { status: 401 });
   }
+
+  if (request.signal.aborted) return new Response(null, { status: 204 });
 
   const encoder = new TextEncoder();
 
@@ -149,15 +151,16 @@ export async function GET(request: Request) {
       // Start polling (first update runs after short delay to let connection establish)
       const intervalId = setInterval(sendUpdate, POLL_INTERVAL);
       // Small delay before first update to ensure stream is established
-      setTimeout(sendUpdate, 100);
+      const initialUpdateId = setTimeout(sendUpdate, 100);
 
       // Clean up on client disconnect
       request.signal.addEventListener('abort', () => {
         isClosed = true;
+        clearTimeout(initialUpdateId);
         clearInterval(intervalId);
         clearInterval(heartbeatId);
         controller.close();
-      });
+      }, { once: true });
     },
   });
 

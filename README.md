@@ -127,10 +127,15 @@ Mirror only the dashboard-relevant slice here: collector assumptions, health sem
 
 ### Authentication
 
+The public dashboard uses one Cloudflare Access email-code sign-in. Pages, data APIs
+and the event stream verify the signed identity for this application. Logging out
+ends the user's sessions across Cloudflare Access apps. The direct-origin recovery login uses the dashboard password.
+The issuer, public application audience and hostname are in `src/lib/cloudflare-access.ts`.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/auth/login` | POST | Authenticate with dashboard password |
-| `/api/auth/logout` | POST | Clear session cookie |
+| `/api/auth/login` | POST | Sign in to the direct-origin recovery route |
+| `/api/auth/logout` | POST | Clear the recovery cookie and return the sign-out destination |
 
 ### Coolify
 
@@ -191,7 +196,7 @@ The dashboard is configured entirely through environment variables. See [`.env.e
 |----------|---------|----------|
 | `COOLIFY_API_URL` | Your Coolify API endpoint | Yes |
 | `COOLIFY_API_TOKEN` | API token for Coolify access | Yes |
-| `DASHBOARD_PASSWORD` | Protects the dashboard with authentication | Strongly recommended |
+| `DASHBOARD_PASSWORD` | Direct-origin recovery password | Required for production recovery |
 | `DASHBOARD_SESSION_SECRET` | Separate HMAC key for session cookies | Yes in production |
 | `METRICS_TOKEN` | Bearer token for the Prometheus self-scrape | Yes in production |
 
@@ -243,9 +248,9 @@ BullMQ workers are detected via `bull:*:stalled-check` TTL keys in Redis. Rather
 
 ### Authentication & Security
 
-- **Password protection** — Optional but strongly recommended via `DASHBOARD_PASSWORD`
-- **Session management** — httpOnly cookies with 7-day expiration
-- **Public endpoints** — Only `/login` and `/api/health` are accessible without authentication
+- **Dashboard sign-in** — Cloudflare email code on the public hostname and a separate direct-origin recovery password
+- **Session management** — The public Access policy is eight hours. The direct-origin recovery cookie is HttpOnly and lasts seven days.
+- **Public health** — `/api/health` is accessible without signing in. Public visits to `/login` go through Cloudflare Access.
 - **Token storage** — All API tokens stay server-side in environment variables
 
 ## Development & Community

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { usesCloudflareAccess } from '@/lib/cloudflare-access';
 import { validatePassword, createSession } from '@/lib/auth';
 import {
   checkLoginRateLimit,
@@ -10,6 +11,9 @@ import {
 } from '@/lib/auth-rate-limit';
 
 export async function POST(request: Request) {
+  if (usesCloudflareAccess(request.headers, request.url)) {
+    return NextResponse.json({ error: 'Use your Cloudflare email sign-in.' }, { status: 403 });
+  }
   try {
     const identifier = getLoginClientIdentifier(request);
     const [currentClientLimit, currentGlobalLimit] = await Promise.all([
@@ -86,8 +90,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  // Check if password protection is enabled
-  const passwordRequired = Boolean(process.env.DASHBOARD_PASSWORD);
+export async function GET(request: Request) {
+  const passwordRequired = !usesCloudflareAccess(request.headers, request.url) && Boolean(process.env.DASHBOARD_PASSWORD);
   return NextResponse.json({ passwordRequired });
 }
