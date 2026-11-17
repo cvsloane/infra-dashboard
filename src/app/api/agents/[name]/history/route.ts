@@ -16,7 +16,7 @@ export async function GET(
   context: { params: Promise<{ name: string }> }
 ) {
   // Verify authentication
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

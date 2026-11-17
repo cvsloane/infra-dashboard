@@ -3,7 +3,7 @@ import { isAuthenticatedFromRequest } from '@/lib/auth';
 import { getLocalAIGpuLeaseStatus } from '@/lib/prometheus/client';
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

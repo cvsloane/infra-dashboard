@@ -3,7 +3,7 @@ import { isAuthenticatedFromRequest } from '@/lib/auth';
 import { getWorkerSupervisorStatus } from '@/lib/redis/workers';
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
@@ -26,8 +26,8 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ pathname, onClose }: SidebarContentProps) {
-  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
 
   const handleNavClick = () => {
     // Close sidebar on mobile after navigation
@@ -36,11 +36,14 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
+    setLogoutFailed(false);
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!response.ok) throw new Error('Logout failed');
+      const { redirectTo } = await response.json();
+      window.location.assign(redirectTo === '/cdn-cgi/access/logout' ? redirectTo : '/login');
+    } catch {
+      setLogoutFailed(true);
     } finally {
       setIsLoggingOut(false);
     }
@@ -106,13 +109,13 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
 
       {/* User Profile / Footer */}
       <div className="border-t p-4">
+        {logoutFailed && <p role="alert" className="mb-2 text-sm text-destructive">Could not log out. Try again.</p>}
         <div className="flex items-center gap-3 rounded-lg border p-3 shadow-sm bg-card">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
             <User className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="flex-1 overflow-hidden">
             <p className="truncate text-sm font-medium">Administrator</p>
-            <p className="truncate text-xs text-muted-foreground">admin@infra.local</p>
           </div>
           <Button
             variant="ghost"

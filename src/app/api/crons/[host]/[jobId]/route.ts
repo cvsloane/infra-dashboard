@@ -13,7 +13,7 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ host: string; jobId: string }> },
 ) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { host, jobId } = await context.params;

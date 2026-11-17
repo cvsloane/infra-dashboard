@@ -29,7 +29,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ host: string; jobId: string }> },
 ) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

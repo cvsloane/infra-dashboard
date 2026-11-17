@@ -13,7 +13,7 @@ import { getHermesOverviewSummary } from '@/lib/hermes/client';
 const POLL_INTERVAL = 15000;
 
 export async function GET(request: Request) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return new Response('Unauthorized', { status: 401 });
   }
 

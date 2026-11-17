@@ -29,7 +29,7 @@ const SEVERITY_RANK: Record<string, number> = {
 };
 
 export async function GET(request: NextRequest) {
-  if (!isAuthenticatedFromRequest(request)) {
+  if (!(await isAuthenticatedFromRequest(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);

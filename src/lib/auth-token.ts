@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
+export const COOKIE_NAME = 'infra-dashboard-session';
 export const COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 
 const TOKEN_VERSION = 'v1';
