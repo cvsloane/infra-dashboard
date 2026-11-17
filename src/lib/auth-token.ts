@@ -6,7 +6,7 @@ export const COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 7;
 const TOKEN_VERSION = 'v1';
 
 function sessionSecret(explicitSecret?: string): string {
-  return explicitSecret ?? process.env.DASHBOARD_SESSION_SECRET ?? process.env.DASHBOARD_PASSWORD ?? '';
+  return explicitSecret || process.env.DASHBOARD_SESSION_SECRET || process.env.DASHBOARD_PASSWORD || '';
 }
 
 function signPayload(payload: string, secret: string): string {
@@ -24,7 +24,9 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 export function createSessionToken(explicitSecret?: string, now = Date.now()): string {
   const payload = `${TOKEN_VERSION}.${now}`;
-  const signature = signPayload(payload, sessionSecret(explicitSecret));
+  const secret = sessionSecret(explicitSecret);
+  if (!secret) throw new Error('Recovery sign-in requires a session signing key');
+  const signature = signPayload(payload, secret);
   return `${payload}.${signature}`;
 }
 
@@ -45,6 +47,8 @@ export function isValidSessionToken(token: string, explicitSecret?: string, now 
   }
 
   const payload = `${version}.${timestamp}`;
-  const expected = signPayload(payload, sessionSecret(explicitSecret));
+  const secret = sessionSecret(explicitSecret);
+  if (!secret) return false;
+  const expected = signPayload(payload, secret);
   return constantTimeEqual(signature, expected);
 }

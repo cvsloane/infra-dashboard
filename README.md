@@ -129,7 +129,7 @@ Mirror only the dashboard-relevant slice here: collector assumptions, health sem
 
 The public dashboard uses one Cloudflare Access email-code sign-in. Pages, data APIs
 and the event stream verify the signed identity for this application. Logging out
-ends the Access session. The direct-origin recovery login uses the dashboard password.
+ends the user's sessions across Cloudflare Access apps. The direct-origin recovery login uses the dashboard password.
 The issuer, public application audience and hostname are in `src/lib/cloudflare-access.ts`.
 
 | Endpoint | Method | Description |
@@ -249,8 +249,8 @@ BullMQ workers are detected via `bull:*:stalled-check` TTL keys in Redis. Rather
 ### Authentication & Security
 
 - **Dashboard sign-in** — Cloudflare email code on the public hostname and a separate direct-origin recovery password
-- **Session management** — httpOnly cookies with 7-day expiration
-- **Public endpoints** — Only `/login` and `/api/health` are accessible without authentication
+- **Session management** — The public Access policy is eight hours. The direct-origin recovery cookie is HttpOnly and lasts seven days.
+- **Public health** — `/api/health` is accessible without signing in. Public visits to `/login` go through Cloudflare Access.
 - **Token storage** — All API tokens stay server-side in environment variables
 
 ## Development & Community

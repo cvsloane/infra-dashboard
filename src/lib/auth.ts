@@ -17,6 +17,7 @@ export async function isAuthenticated(): Promise<boolean> {
 
 // Create session cookie after successful login
 export async function createSession(): Promise<void> {
+  if (!process.env.DASHBOARD_PASSWORD && process.env.NODE_ENV !== 'production') return;
   const cookieStore = await cookies();
   const token = createSessionToken();
 

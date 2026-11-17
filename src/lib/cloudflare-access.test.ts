@@ -66,7 +66,9 @@ describe('dashboard email sign-in', () => {
     expect((await getLocalAi(new Request(`${publicOrigin}/api/local-ai/status`, { headers }))).status).toBe(401);
     expect((await passwordLogin(new Request(`${publicOrigin}/api/auth/login`, { method: 'POST', headers }))).status).toBe(403);
     expect(await isAuthenticatedFromRequest(new Request(directOrigin, { headers: { ...headers, host: dashboardAccess.hostname } }))).toBe(false);
-    expect(await isAuthenticatedFromRequest(new Request(directOrigin, { headers: { ...headers, 'cf-access-jwt-assertion': 'invalid' } }))).toBe(false);
+    const accessHeaders = { 'cf-access-jwt-assertion': await applicationToken(), 'x-forwarded-host': dashboardAccess.hostname };
+    expect(await isAuthenticatedFromRequest(new Request(directOrigin, { headers: accessHeaders }))).toBe(false);
+    expect(await isAuthenticatedFromRequest(new Request(publicOrigin, { headers: { ...accessHeaders, host: 'localhost:3000' } }))).toBe(false);
   });
 
   it('allows changes from the signed-in dashboard and rejects cross-origin browser changes', async () => {

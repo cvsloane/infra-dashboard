@@ -17,11 +17,9 @@ function isDashboardHost(host: string | null): boolean {
 }
 
 export function usesCloudflareAccess(headers: IncomingHeaders, url?: string): boolean {
-  // Host information selects the stricter sign-in path. Only a verified token grants access.
-  return headers.get(assertionHeader) !== null
-    || isDashboardHost(headers.get('host'))
-    || isDashboardHost(headers.get('x-forwarded-host')?.split(',')[0].trim() ?? null)
-    || (url !== undefined && isDashboardHost(new URL(url).hostname));
+  // The ingress preserves Host. An assertion by itself cannot select the public login on a recovery host.
+  const host = headers.get('host') ?? (url ? new URL(url).hostname : null);
+  return isDashboardHost(host);
 }
 
 export function allowsAccessRequestOrigin(headers: IncomingHeaders, method = 'GET'): boolean {

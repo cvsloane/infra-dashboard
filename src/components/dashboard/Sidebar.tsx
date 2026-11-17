@@ -115,12 +115,14 @@ function SidebarContent({ pathname, onClose }: SidebarContentProps) {
             <User className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="flex-1 overflow-hidden">
-            <p className="truncate text-sm font-medium">Administrator</p>
+            <p className="text-sm font-medium">Dashboard session</p>
+            <p className="text-xs text-muted-foreground">Public sign-out ends your Cloudflare Access sessions.</p>
           </div>
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            title="Log out of the dashboard"
             onClick={handleLogout}
             disabled={isLoggingOut}
           >
