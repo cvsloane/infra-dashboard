@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
   const upstream = await fetch(`${baseUrl}/fleet/activity/stream`, {
     headers: hermesSidecarHeaders(),
+    signal: request.signal,
     cache: 'no-store',
   });
 
