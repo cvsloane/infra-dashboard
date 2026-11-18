@@ -254,15 +254,15 @@ function sourceHealthRows(data: DashboardUpdate, observedAt: string | null): Ser
     { id: 'redis', name: 'Redis', scope: 'Redis PING request', href: '/queues', action: 'Open Queues' },
   ] as const;
 
-  return probes.flatMap(({ id, name, scope, href, action }) => {
+  return probes.map(({ id, name, scope, href, action }) => {
     const report = data.health?.[id];
-    if (!report) return [];
-    return [{
-      id: `source:${id}`, name, kind: 'Source connectivity', href, action, observedAt,
-      status: report.ok ? 'healthy' : 'unknown',
-      summary: report.ok ? 'The dashboard’s connectivity check succeeded.' : 'The dashboard’s connectivity check failed.',
+    return {
+      id: `source:${id}`, name, kind: 'Source connectivity', href, action, observedAt: report ? observedAt : null,
+      status: report?.ok ? 'healthy' : 'unknown',
+      summary: !report ? 'There is no reading for this connectivity check.'
+        : report.ok ? 'The dashboard’s connectivity check succeeded.' : 'The dashboard’s connectivity check failed.',
       facts: [{ label: 'Check scope', value: scope }], events: [],
-    }];
+    };
   });
 }
 

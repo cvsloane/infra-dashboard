@@ -41,20 +41,23 @@ export default function InfrastructureDetailsPage() {
       const raw = localStorage.getItem(PINNED_WIDGETS_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as unknown;
-      const ids = normalizeWidgetIds(parsed);
-      if (ids.length > 0) setPinnedWidgetIds(ids);
+      if (Array.isArray(parsed)) {
+        const ids = normalizeWidgetIds(parsed);
+        if (!parsed.length || ids.length) setPinnedWidgetIds(ids);
+      }
     } catch {
       // Ignore invalid JSON / storage access errors.
     }
   }, []);
 
-  useEffect(() => {
+  function changePinnedWidgets(ids: WidgetId[]) {
+    setPinnedWidgetIds(ids);
     try {
-      localStorage.setItem(PINNED_WIDGETS_STORAGE_KEY, JSON.stringify(pinnedWidgetIds));
+      localStorage.setItem(PINNED_WIDGETS_STORAGE_KEY, JSON.stringify(ids));
     } catch {
-      // Ignore storage errors (private mode, quota, etc).
+      // Private mode may disallow writing preferences.
     }
-  }, [pinnedWidgetIds]);
+  }
 
   const fetchApplicationCount = async () => {
     try {
@@ -91,10 +94,11 @@ export default function InfrastructureDetailsPage() {
   }, []);
 
   useEffect(() => {
-    if (sseData?.type !== 'update') return;
+    if (!isConnected || sseData?.type !== 'update') return;
 
     const deploymentsData = sseData.deployments || { active: [], recent: [], stats: { queued: 0, inProgress: 0, finishedToday: 0, failedToday: 0 } };
     const queues = sseData.queues || [];
+    const queuesAvailable = sseData.queuesAvailable ?? Boolean(sseData.queues?.length);
     const totalFailed = queues.reduce((sum, q) => sum + (q.failed || 0), 0);
     const workersDown = queues.filter((q) =>
       q.workerState ? q.workerState === 'down' : q.workerCount !== undefined ? q.workerCount === 0 : q.workerActive === false
@@ -182,8 +186,8 @@ export default function InfrastructureDetailsPage() {
       },
       hermes: hermesData,
       bullmq: {
-        status: workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : 'ok',
-        message: workersDown > 0
+        status: !queuesAvailable ? 'unknown' : workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : 'ok',
+        message: !queuesAvailable ? 'Queue readings are unavailable.' : workersDown > 0
           ? `${workersDown} worker${workersDown > 1 ? 's' : ''} down`
           : totalFailed > 0
           ? `${totalFailed} failed jobs need attention`
@@ -193,7 +197,7 @@ export default function InfrastructureDetailsPage() {
         workersDown,
       },
       sites: {
-        status: (sitesData?.downCount || 0) > 0 ? 'error' : (sitesData?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
+        status: !sitesData || sitesData.available === false ? 'unknown' : (sitesData.downCount || 0) > 0 ? 'error' : (sitesData?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
         downSites: sitesList.filter((s) => s.status === 'down'),
         allSites: sitesList,
         totalSites: sitesList.length,
@@ -203,37 +207,42 @@ export default function InfrastructureDetailsPage() {
       },
     });
     setLoading(false);
-  }, [sseData, applicationCount]);
+  }, [sseData, applicationCount, isConnected]);
 
   useEffect(() => {
     if (isConnected) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    let next: ReturnType<typeof setTimeout>;
     const fetchData = async () => {
       try {
         const [coolifyRes, postgresRes, backupsRes, alertsRes, bullmqRes, sitesRes, workerRes, hermesRes] = await Promise.all([
-          fetch('/api/coolify/applications'),
-          fetch('/api/postgres/health'),
-          fetch('/api/postgres/backups'),
-          fetch('/api/alertmanager/alerts'),
-          fetch('/api/bullmq/queues'),
-          fetch('/api/servers/status'),
-          fetch('/api/workers/status'),
-          fetch('/api/hermes/summary'),
+          fetch('/api/coolify/applications', { signal }),
+          fetch('/api/postgres/health', { signal }),
+          fetch('/api/postgres/backups', { signal }),
+          fetch('/api/alertmanager/alerts', { signal }),
+          fetch('/api/bullmq/queues', { signal }),
+          fetch('/api/servers/status', { signal }),
+          fetch('/api/workers/status', { signal }),
+          fetch('/api/hermes/summary', { signal }),
         ]);
 
         const coolifyData = await coolifyRes.json();
-        setApplicationCount(coolifyData.applications?.length || 0);
         const postgresData = await postgresRes.json();
         const backupsData = backupsRes.ok ? await backupsRes.json() : null;
         const alertsData = alertsRes.ok ? await alertsRes.json() : null;
-        const bullmqData = await bullmqRes.json();
-        const sitesData = sitesRes.ok ? await sitesRes.json() : { sites: { sites: [], downCount: 0, sslExpiringSoonCount: 0 } };
+        const bullmqData = bullmqRes.ok ? await bullmqRes.json() : {};
+        const queuesAvailable = Array.isArray(bullmqData.queues);
+        const sitesData = sitesRes.ok ? await sitesRes.json() : {};
         const sitesList = sitesData.sites?.sites || [];
         const workerData = workerRes.ok ? await workerRes.json() : { status: null };
         const hermesData = hermesRes.ok ? await hermesRes.json() : null;
 
         // Fetch recent deployments (now includes active, recent, and stats)
-        const deploymentsRes = await fetch('/api/coolify/deployments');
+        const deploymentsRes = await fetch('/api/coolify/deployments', { signal });
         const deploymentsData = await deploymentsRes.json();
+        if (signal.aborted) return;
+        setApplicationCount(coolifyData.applications?.length || 0);
 
         const totalFailed = bullmqData.queues?.reduce(
           (sum: number, q: { failed: number }) => sum + (q.failed || 0),
@@ -319,8 +328,8 @@ export default function InfrastructureDetailsPage() {
           },
           hermes: hermesData,
           bullmq: {
-            status: workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : bullmqRes.ok ? 'ok' : 'error',
-            message: workersDown > 0
+            status: !queuesAvailable ? 'unknown' : workersDown > 0 ? 'error' : totalFailed > 0 ? 'warning' : 'ok',
+            message: !queuesAvailable ? 'Queue readings are unavailable.' : workersDown > 0
               ? `${workersDown} worker${workersDown > 1 ? 's' : ''} down`
               : totalFailed > 0
               ? `${totalFailed} failed jobs need attention`
@@ -330,7 +339,7 @@ export default function InfrastructureDetailsPage() {
             workersDown,
           },
           sites: {
-            status: sitesData.sites?.downCount > 0 ? 'error' : (sitesData.sites?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
+            status: !sitesData.sites || sitesData.sites.available === false ? 'unknown' : sitesData.sites.downCount > 0 ? 'error' : (sitesData.sites?.sslExpiringSoonCount || 0) > 0 ? 'warning' : 'ok',
             downSites: sitesList.filter((s: OverviewSiteHealth) => s.status === 'down'),
             allSites: sitesList,
             totalSites: sitesList.length,
@@ -340,15 +349,20 @@ export default function InfrastructureDetailsPage() {
           },
         });
       } catch (error) {
-        console.error('Failed to fetch overview data:', error);
+        if (!signal.aborted) console.error('Failed to fetch overview data:', error);
       } finally {
-        setLoading(false);
+        if (!signal.aborted) {
+          setLoading(false);
+          next = setTimeout(fetchData, 30000);
+        }
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      controller.abort();
+      clearTimeout(next);
+    };
   }, [isConnected]);
 
   const visibleWidgetIds = pinnedWidgetIds.slice(0, MAX_VISIBLE_WIDGETS);
@@ -362,7 +376,7 @@ export default function InfrastructureDetailsPage() {
             <p className="text-sm text-muted-foreground">Pinned metrics and source details</p>
             <Link href="/" className="text-sm text-primary underline underline-offset-4">Back to service overview</Link>
           </div>
-          <WidgetPicker selected={pinnedWidgetIds} onChange={setPinnedWidgetIds} />
+          <WidgetPicker selected={pinnedWidgetIds} onChange={changePinnedWidgets} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -427,8 +441,8 @@ export default function InfrastructureDetailsPage() {
   const sectionOpen = {
     alerts: (data?.alerts.firing || 0) > 0,
     deployments: (data?.coolify.activeDeployments?.length || 0) > 0 || deployStats.failedToday > 0,
-    queues: (data?.bullmq.workersDown || 0) > 0 || (data?.bullmq.totalFailed || 0) > 0 || workerAlerts.length > 0 || Boolean(data?.workerSupervisor?.stale),
-    sites: (data?.sites.downSites?.length || 0) > 0 || (data?.sites.sslExpiringSoonCount || 0) > 0,
+    queues: data?.bullmq.status === 'unknown' || (data?.bullmq.workersDown || 0) > 0 || (data?.bullmq.totalFailed || 0) > 0 || workerAlerts.length > 0 || Boolean(data?.workerSupervisor?.stale),
+    sites: data?.sites.status === 'unknown' || (data?.sites.downSites?.length || 0) > 0 || (data?.sites.sslExpiringSoonCount || 0) > 0,
     data: (data?.postgres.status || 'unknown') !== 'ok' || (data?.backups.status || 'unknown') !== 'ok',
   };
 
@@ -454,7 +468,7 @@ export default function InfrastructureDetailsPage() {
           <p className="text-sm text-muted-foreground">Pinned metrics and source details</p>
             <Link href="/" className="text-sm text-primary underline underline-offset-4">Back to service overview</Link>
         </div>
-        <WidgetPicker selected={pinnedWidgetIds} onChange={setPinnedWidgetIds} />
+        <WidgetPicker selected={pinnedWidgetIds} onChange={changePinnedWidgets} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -565,9 +579,9 @@ export default function InfrastructureDetailsPage() {
           href="/queues"
           defaultOpen={sectionOpen.queues}
           summary={[
-            { label: 'Workers down', value: data?.bullmq.workersDown ?? 0 },
-            { label: 'Failed', value: data?.bullmq.totalFailed ?? 0 },
-            { label: 'Queues', value: data?.bullmq.queues?.length ?? 0 },
+            { label: 'Workers down', value: data?.bullmq.status === 'unknown' ? '—' : data?.bullmq.workersDown ?? 0 },
+            { label: 'Failed', value: data?.bullmq.status === 'unknown' ? '—' : data?.bullmq.totalFailed ?? 0 },
+            { label: 'Queues', value: data?.bullmq.status === 'unknown' ? '—' : data?.bullmq.queues?.length ?? 0 },
           ]}
         >
           {(data?.workerSupervisor?.stale || workerAlerts.length > 0) && (
@@ -614,7 +628,7 @@ export default function InfrastructureDetailsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No queues found</p>
+              <p className="text-sm text-muted-foreground">{data?.bullmq.status === 'unknown' ? 'Queue readings are unavailable.' : 'No queues found.'}</p>
             )}
           </div>
         </CollapsibleSection>
@@ -625,9 +639,9 @@ export default function InfrastructureDetailsPage() {
           href="/servers"
           defaultOpen={sectionOpen.sites}
           summary={[
-            { label: 'Down', value: data?.sites.downSites?.length ?? 0 },
-            { label: 'SSL soon', value: data?.sites.sslExpiringSoonCount ?? 0 },
-            { label: 'Healthy', value: `${data?.sites.healthySites ?? 0}/${data?.sites.totalSites ?? 0}` },
+            { label: 'Down', value: data?.sites.status === 'unknown' ? '—' : data?.sites.downSites?.length ?? 0 },
+            { label: 'SSL soon', value: data?.sites.status === 'unknown' ? '—' : data?.sites.sslExpiringSoonCount ?? 0 },
+            { label: 'Healthy', value: data?.sites.status === 'unknown' ? '—' : `${data?.sites.healthySites ?? 0}/${data?.sites.totalSites ?? 0}` },
           ]}
         >
           {sitesNeedingAttention.length > 0 ? (
@@ -667,7 +681,10 @@ export default function InfrastructureDetailsPage() {
               })}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No sites needing attention.</div>
+            <div className="text-sm text-muted-foreground">
+              {data?.sites.status === 'unknown' ? 'Site readings are unavailable.'
+                : data?.sites.totalSites === 0 ? 'No site checks were returned.' : 'No sites needing attention.'}
+            </div>
           )}
         </CollapsibleSection>
 

@@ -217,7 +217,14 @@ export function ServiceOverview() {
             )}
             {detail && <StateLabel status={detail.status} />}
             <h2 id="service-heading" ref={heading} tabIndex={-1}>{detail?.name ?? 'Service evidence unavailable'}</h2>
-            <p className={styles.muted}>{detail?.summary ?? (snapshot ? 'This service is absent from the current reading.' : 'Waiting for a monitoring reading.')}</p>
+            {unavailable ? (
+              <div role="status" className={styles.empty}>
+                <p>The dashboard could not retrieve a monitoring reading.</p>
+                <Button variant="outline" onClick={retry}><RefreshCw size={16} />Refresh readings</Button>
+              </div>
+            ) : (
+              <p className={styles.muted}>{detail?.summary ?? (snapshot ? 'This service is absent from the current reading.' : 'Waiting for a monitoring reading.')}</p>
+            )}
             {detail && (
               <>
                 {stale && <p className={styles.detailMeta}>Last known evidence from the previous reading</p>}

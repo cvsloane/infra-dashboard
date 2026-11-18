@@ -452,6 +452,23 @@ test('the overview polls its sources when the live stream opens without a readin
   await expect(page.getByRole('row', { name: /paving-site.*Healthy/ })).toBeVisible();
 });
 
+test('a phone deep link shows failed readings and a refresh action', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/**', route => route.fulfill({ status: 503, body: '{}' }));
+  await page.goto('/?service=recovery');
+  const detail = page.getByRole('region', { name: 'Service evidence unavailable' });
+  await expect(detail.getByText('The dashboard could not retrieve a monitoring reading.')).toBeVisible();
+  await expect(detail.getByRole('button', { name: 'Refresh readings' })).toBeVisible();
+});
+
+test('missing connectivity checks remain visible when the other sources return readings', async ({ page }) => {
+  await page.route('**/api/health', route => route.fulfill({ status: 503, body: '{}' }));
+  await page.goto('/');
+  const table = page.getByRole('table', { name: 'Service health' });
+  await expect(table.getByRole('row', { name: /Redis.*Monitoring gap/ })).toBeVisible();
+  await expect(table.getByRole('row', { name: /content.*Healthy/ })).toBeVisible();
+});
+
 test('scheduled jobs smoke renders cron inventory', async ({ page }) => {
   await page.goto('/crons');
   await expect(page.getByRole('heading', { name: 'Scheduled jobs' })).toBeVisible();
