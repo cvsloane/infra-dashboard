@@ -209,6 +209,7 @@ packets 426
 elements = { 192.168.88.188 timeout 1d expires 22h }
 """
         with patch.object(collector, "run_ssh", return_value=subprocess.CompletedProcess([], 0, fixture)), \
+             patch.object(collector, "load_policy_intent", return_value={}), \
              patch.object(collector, "persist_router_log_tail"), \
              patch.object(collector, "read_recent_lines", return_value=[]):
             row, _, _, _ = collector.collect_router(collector.ROUTERS[0])
