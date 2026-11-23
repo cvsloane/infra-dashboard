@@ -30,6 +30,11 @@ EXPECTED_KIDS_SUBNETS = {
     "flint-office": "192.168.110.0/24",
     "flint-school": "192.168.109.0/24",
 }
+# The school-mode policy job (home-network-policy.timer, every 5 min) moves the kids subnets
+# between profiles by schedule; its rotation log records what it intends for each router.
+POLICY_LOG = Path(os.environ.get("HOME_NETWORK_POLICY_LOG", "/var/log/home-network-policy/rotation.jsonl"))
+POLICY_LOG_MAX_AGE_SEC = 900
+POLICY_LOG_TAIL_BYTES = 65536
 
 DEFAULT_ROUTER_LOG_DIR = Path("/var/lib/home-network-monitor/router-logs")
 DEFAULT_ROUTER_LOG_POLL_MAX_AGE_SEC = 300
@@ -297,7 +302,7 @@ def collect_router(router: dict[str, str]) -> tuple[dict[str, Any], list[dict[st
 
     if nextdns.get("running") is False:
         warnings.append(f"{hostname} NextDNS is down")
-    warnings.extend(validate_nextdns_policy(hostname, nextdns))
+    warnings.extend(validate_nextdns_policy(hostname, nextdns, load_policy_intent()))
     if role in {"office", "school"} and wan.get("up") is False:
         warnings.append(f"{hostname} uplink is down")
     if ping.get("ok") is False:
@@ -430,19 +435,61 @@ def parse_nextdns(hostname: str, status_raw: str, config_raw: str) -> dict[str, 
     }
 
 
-def validate_nextdns_policy(hostname: str, nextdns: dict[str, Any]) -> list[str]:
+def load_policy_intent(path: Path | None = None, now: dt.datetime | None = None) -> dict[str, dict[str, str]]:
+    """Latest subnet-to-profile mapping the school-mode policy job intends, per router.
+
+    Reads only the tail of the rotation log. Records older than POLICY_LOG_MAX_AGE_SEC are
+    ignored, so a stopped policy job falls back to the fixed Kids Strict expectation.
+    """
+    path = path or POLICY_LOG
+    try:
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - POLICY_LOG_TAIL_BYTES))
+            lines = fh.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return {}
+    now = now or dt.datetime.now(dt.timezone.utc)
+    intent: dict[str, dict[str, str]] = {}
+    for line in lines:
+        try:
+            record = json.loads(line)
+            stamp = dt.datetime.fromisoformat(record["ts"])
+        except (ValueError, KeyError, TypeError):
+            continue
+        if stamp.tzinfo is None or (now - stamp).total_seconds() > POLICY_LOG_MAX_AGE_SEC:
+            continue
+        mapping = {}
+        for entry in record.get("desired") or []:
+            target, _, profile = str(entry).partition("=")
+            if "/" in target and profile:
+                mapping[target] = profile
+        if record.get("router"):
+            intent[record["router"]] = mapping
+    return intent
+
+
+def validate_nextdns_policy(
+    hostname: str, nextdns: dict[str, Any], intent: dict[str, dict[str, str]] | None = None
+) -> list[str]:
     warnings: list[str] = []
     if nextdns.get("baseline_profile") != BASELINE_NEXTDNS_PROFILE:
         warnings.append(f"{hostname} NextDNS baseline profile mismatch")
     expected_subnet = EXPECTED_KIDS_SUBNETS.get(hostname)
     if expected_subnet:
+        intended = (intent or {}).get(hostname, {}).get(expected_subnet)
+        expected_profile = intended or KIDS_NEXTDNS_PROFILE
         conditional_profiles = nextdns.get("conditional_profiles") or []
         has_kids_mapping = any(
-            row.get("subnet") == expected_subnet and row.get("profile") == KIDS_NEXTDNS_PROFILE
+            row.get("subnet") == expected_subnet and row.get("profile") == expected_profile
             for row in conditional_profiles
             if isinstance(row, dict)
         )
-        if not has_kids_mapping:
+        if not has_kids_mapping and intended:
+            warnings.append(
+                f"{hostname} kids subnet {expected_subnet} is not on the profile the school-mode policy intends ({intended})"
+            )
+        elif not has_kids_mapping:
             warnings.append(f"{hostname} missing Kids Strict NextDNS mapping for {expected_subnet}")
     return warnings
 
