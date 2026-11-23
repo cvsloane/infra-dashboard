@@ -209,6 +209,7 @@ packets 426
 elements = { 192.168.88.188 timeout 1d expires 22h }
 """
         with patch.object(collector, "run_ssh", return_value=subprocess.CompletedProcess([], 0, fixture)), \
+             patch.object(collector, "load_policy_intent", return_value={}), \
              patch.object(collector, "persist_router_log_tail"), \
              patch.object(collector, "read_recent_lines", return_value=[]):
             row, _, _, _ = collector.collect_router(collector.ROUTERS[0])
@@ -227,6 +228,57 @@ elements = { 192.168.88.188 timeout 1d expires 22h }
             collector.send_dns_alerts(snapshot())
         self.sent.assert_not_called()
         self.assertFalse(self.state.exists())
+
+
+class KidsPolicyIntent(unittest.TestCase):
+    """The kids-subnet check follows the school-mode policy job instead of a fixed profile."""
+
+    NOW = collector.dt.datetime(2026, 11, 23, 18, 0, tzinfo=collector.dt.timezone.utc)
+
+    def write_log(self, records):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        handle.write("partial line from an earlier record\n")
+        for record in records:
+            handle.write(json.dumps(record) + "\n")
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return Path(handle.name)
+
+    def record(self, router, subnet, profile, ts="2026-11-23T12:55:00-05:00"):
+        return {"router": router, "ts": ts, "mode": "school",
+                "desired": ["aa:bb:cc:dd:ee:ff=65c555", f"{subnet}={profile}", "23b61e"]}
+
+    def nextdns(self, subnet, profile):
+        return {"baseline_profile": "23b61e", "conditional_profiles": [{"subnet": subnet, "profile": profile}]}
+
+    def test_school_hours_mapping_is_not_a_warning(self):
+        log = self.write_log([self.record("flint-office", "192.168.110.0/24", "cfd6b3")])
+        intent = collector.load_policy_intent(log, now=self.NOW)
+        self.assertEqual(intent, {"flint-office": {"192.168.110.0/24": "cfd6b3"}})
+        self.assertEqual(collector.validate_nextdns_policy(
+            "flint-office", self.nextdns("192.168.110.0/24", "cfd6b3"), intent), [])
+
+    def test_router_off_the_intended_profile_warns(self):
+        log = self.write_log([self.record("flint-school", "192.168.109.0/24", "cfd6b3")])
+        intent = collector.load_policy_intent(log, now=self.NOW)
+        warnings = collector.validate_nextdns_policy("flint-school", self.nextdns("192.168.109.0/24", "43d9e6"), intent)
+        self.assertEqual(warnings, ["flint-school kids subnet 192.168.109.0/24 is not on the profile the school-mode policy intends (cfd6b3)"])
+
+    def test_latest_record_wins(self):
+        log = self.write_log([
+            self.record("flint-cabinet", "192.168.108.0/24", "43d9e6", ts="2026-11-23T12:50:00-05:00"),
+            self.record("flint-cabinet", "192.168.108.0/24", "cfd6b3", ts="2026-11-23T12:55:00-05:00"),
+        ])
+        self.assertEqual(collector.load_policy_intent(log, now=self.NOW)["flint-cabinet"]["192.168.108.0/24"], "cfd6b3")
+
+    def test_stale_or_missing_log_keeps_fixed_kids_strict_check(self):
+        log = self.write_log([self.record("flint-office", "192.168.110.0/24", "cfd6b3", ts="2026-11-23T11:00:00-05:00")])
+        intent = collector.load_policy_intent(log, now=self.NOW)
+        self.assertEqual(intent, {})
+        self.assertEqual(collector.load_policy_intent(Path("/nonexistent/rotation.jsonl"), now=self.NOW), {})
+        self.assertEqual(collector.validate_nextdns_policy("flint-office", self.nextdns("192.168.110.0/24", "cfd6b3"), intent),
+                         ["flint-office missing Kids Strict NextDNS mapping for 192.168.110.0/24"])
+        self.assertEqual(collector.validate_nextdns_policy("flint-office", self.nextdns("192.168.110.0/24", "43d9e6"), intent), [])
 
 
 if __name__ == "__main__":
